@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+*.m4a
+*.mp3
+*.wav
+*.zip
+*.egg-info/
+.env
+run_log_*.txt
+
