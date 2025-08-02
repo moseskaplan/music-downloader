@@ -5,7 +5,19 @@ import argparse
 import os
 import pandas as pd
 
+from urllib.parse import urlparse, parse_qs, urlunparse
+
+def clean_youtube_url(original_url: str) -> str:
+    parsed = urlparse(original_url)
+    query = parse_qs(parsed.query)
+    video_id = query.get("v", [None])[0]
+    if video_id:
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return original_url  # fallback
+
+
 def extract_track_data(youtube_url: str, base_music_dir: str, dry_run: bool = False) -> pd.DataFrame:
+    youtube_url = clean_youtube_url(youtube_url)
     ydl_opts = {
         'quiet': True,
         'skip_download': True,

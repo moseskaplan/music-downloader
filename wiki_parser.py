@@ -9,10 +9,27 @@ import argparse
 from urllib.parse import urlparse
 import sys
 
+from urllib.parse import urlparse, urlunparse
+
+def clean_wiki_url(original_url: str) -> str:
+    parsed = urlparse(original_url)
+    cleaned_url = urlunparse((
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path,   # ← keep only path, drop query/fragment
+        '',
+        '',
+        ''
+    ))
+    return cleaned_url
+
+
 def clean_album_title(raw_title: str) -> str:
     return re.sub(r'\s*\(.*?\)\s*', '', raw_title).strip()
 
 def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, dry_run: bool = False, artist_name: str = None) -> pd.DataFrame:
+    wikipedia_url = clean_wiki_url(wikipedia_url)
+    print(f"[DEBUG] Cleaned Wikipedia URL: {wikipedia_url}")
     response = requests.get(wikipedia_url)
     soup = BeautifulSoup(response.content, 'html.parser')
 

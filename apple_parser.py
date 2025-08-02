@@ -6,6 +6,24 @@ import argparse
 import os
 import pandas as pd
 
+from urllib.parse import urlparse, urlunparse
+
+def clean_apple_url(original_url: str) -> str:
+    parsed = urlparse(original_url)
+
+    # Rebuild URL with no query parameters
+    cleaned_url = urlunparse((
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path,
+        parsed.params,
+        "",  # ← strip query
+        parsed.fragment
+    ))
+
+    return cleaned_url
+
+
 def extract_album_id(url):
     # Extract the album ID from the URL (the last number)
     match = re.search(r'/album/.*?/(\d+)', url)
@@ -60,7 +78,12 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Only simulate and log actions.")
     args = parser.parse_args()
 
-    album_name, artist_name, tracks = extract_album_info(args.url)
+    raw_url = args.url
+    cleaned_url = clean_apple_url(raw_url)
+
+    print(f"[DEBUG] Cleaned URL: {cleaned_url}")
+
+    album_name, artist_name, tracks = extract_album_info(cleaned_url)
 
     if not tracks:
         print("[!] No tracks found.")
@@ -86,6 +109,7 @@ def main():
 
     print("\nExtracted Track Data:\n")
     print(df)
+
 
 if __name__ == "__main__":
     main()
