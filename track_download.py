@@ -15,8 +15,16 @@ def parse_duration_str(duration_str):
         return None
 
 
-def clean_filename(text):
-    return "".join(c for c in text if c.isalnum() or c in " -_").strip()
+def clean_filename(text: str) -> str:
+    """Sanitize a filename by allowing common punctuation.
+
+    This function preserves alphanumeric characters, spaces, hyphens, underscores,
+    parentheses and periods. It strips trailing/leading whitespace to produce
+    a filesystem-safe name. If additional characters need to be allowed later
+    (e.g. apostrophes), they can be added to the allowed set.
+    """
+    allowed = set(" -_().")
+    return "".join(c for c in text if c.isalnum() or c in allowed).strip()
 
 
 def download_album_tracks(csv_path, base_music_dir: Path, test_mode=False):
