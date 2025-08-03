@@ -1,13 +1,14 @@
-# youtube_parser.py (yt_dlp version)
+# youtube_parser.py (yt_dlp version with --test-mode)
 
 import yt_dlp
 import argparse
 import os
 import pandas as pd
 
-from urllib.parse import urlparse, parse_qs, urlunparse
+from urllib.parse import urlparse, parse_qs
 
 def clean_youtube_url(original_url: str) -> str:
+    """Extract a clean watch?v=VIDEO_ID format from the given YouTube URL."""
     parsed = urlparse(original_url)
     query = parse_qs(parsed.query)
     video_id = query.get("v", [None])[0]
@@ -15,15 +16,13 @@ def clean_youtube_url(original_url: str) -> str:
         return f"https://www.youtube.com/watch?v={video_id}"
     return original_url  # fallback
 
-
-def extract_track_data(youtube_url: str, base_music_dir: str, dry_run: bool = False) -> pd.DataFrame:
+def extract_track_data(youtube_url: str, base_music_dir: str, test_mode: bool = False) -> pd.DataFrame:
     youtube_url = clean_youtube_url(youtube_url)
     ydl_opts = {
         'quiet': True,
         'skip_download': True,
         'force_generic_extractor': False,
         'extract_flat': False
-        
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -39,10 +38,10 @@ def extract_track_data(youtube_url: str, base_music_dir: str, dry_run: bool = Fa
     print(f"[DEBUG] Duration: {duration_str}")
 
     df = pd.DataFrame([{
-        'track_number': None, # For single tracks, don't assign a number
+        'track_number': None,  # Single track → no number
         'track_title': title,
         'artist_name': artist,
-        'album_name': title,  # Same as track if it's a single
+        'album_name': title,  # For singles, album = track
         'album_year': None,
         'track_duration': duration_str,
         'wikipedia_album_url': youtube_url,
@@ -55,10 +54,10 @@ def extract_track_data(youtube_url: str, base_music_dir: str, dry_run: bool = Fa
     safe_title = title.replace('/', '-').replace(' ', '_')
     folder_name = f"{safe_artist}_{safe_title}"
 
-    # For dry-run, store in /tmp instead of real music folder
-    if dry_run:
+    # Use /tmp in test mode, otherwise save to ~/Music Downloader
+    if test_mode:
         folder_path = os.path.join("/tmp/music_downloader_dryrun", folder_name)
-        print(f"[DRY-RUN] Using temporary output path: {folder_path}")
+        print(f"[TEST-MODE] Using temporary output path: {folder_path}")
     else:
         folder_path = os.path.join(base_music_dir, folder_name)
         print(f"[✓] Output directory: {folder_path}")
@@ -66,25 +65,24 @@ def extract_track_data(youtube_url: str, base_music_dir: str, dry_run: bool = Fa
     os.makedirs(folder_path, exist_ok=True)
 
     csv_path = os.path.join(folder_path, f"{safe_title}_{safe_artist}_track.csv")
-
-    # Always save CSV so run_all.py can find it
     df.to_csv(csv_path, index=False)
-    print(f"[✓] CSV saved to: {csv_path}" if not dry_run else f"[DRY-RUN] CSV saved to: {csv_path}")
 
+    if test_mode:
+        print(f"[TEST-MODE] CSV saved to: {csv_path}")
+    else:
+        print(f"[✓] CSV saved to: {csv_path}")
 
     return df
-
 
 # === CLI ===
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="YouTube single-track scraper")
     parser.add_argument('--url', type=str, required=True, help='YouTube track URL')
-    parser.add_argument('--dry-run', action='store_true', help='Simulate without saving')
+    parser.add_argument('--test-mode', action='store_true', help='Run in test mode (save to /tmp)')
     args = parser.parse_args()
 
     base_music_dir = os.path.expanduser("~/Music Downloader")
-
-    df = extract_track_data(args.url, base_music_dir, dry_run=args.dry_run)
+    df = extract_track_data(args.url, base_music_dir, test_mode=args.test_mode)
 
     print("\nExtracted Track Data:\n")
     print(df)
