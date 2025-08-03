@@ -19,6 +19,7 @@ parser.add_argument("--skip-download", action="store_true", help="Skip track_dow
 parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
 parser.add_argument("--test-mode", action="store_true", help="Enable test mode (always cleans up temp data at end)")
+parser.add_argument("--no-cleanup", action="store_true", help="Skip cleanup at the end (for pytest runs)")
 args = parser.parse_args()
 
 # === CONFIG ===
@@ -29,6 +30,10 @@ os.makedirs(log_dir, exist_ok=True)
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 log_path = os.path.join(log_dir, f"run_log_{timestamp}.txt")
 
+# === Temp dir helper ===
+def get_tmp_dir():
+    """Return correct temporary directory based on mode."""
+    return Path("/tmp/music_downloader_test") if args.test_mode else Path("/tmp/music_downloader_dryrun")
 
 def write_log(message):
     if message is None:
@@ -37,26 +42,22 @@ def write_log(message):
         f.write(str(message) + "\n")
     print(message, flush=True)
 
-
 def clear_tmp_dir():
-    tmp_dir = Path("/tmp/music_downloader_dryrun")
+    tmp_dir = get_tmp_dir()
     if tmp_dir.exists():
         shutil.rmtree(tmp_dir)
     tmp_dir.mkdir(parents=True, exist_ok=True)
     write_log(f"[TEST-MODE] Cleared temp cache: {tmp_dir}")
 
-
 def remove_tmp_dir():
-    tmp_dir = Path("/tmp/music_downloader_dryrun")
+    tmp_dir = get_tmp_dir()
     if tmp_dir.exists():
         shutil.rmtree(tmp_dir)
         write_log(f"[TEST-MODE] Removed temp cache: {tmp_dir}")
 
-
 # Always start fresh in test mode
 if args.test_mode:
     clear_tmp_dir()
-
 
 def run_script(script_name, *extra_args, required=True):
     """Helper to run a script and log the result."""
@@ -77,9 +78,9 @@ def run_script(script_name, *extra_args, required=True):
             sys.exit(e.returncode)
         return False
 
-
 def find_latest_csv(after_timestamp):
-    search_dir = Path("/tmp/music_downloader_dryrun") if args.test_mode else Path(base_dir)
+    """Find the most recently modified CSV after a given timestamp."""
+    search_dir = get_tmp_dir() if args.test_mode else Path(base_dir)
     latest_csv = None
     latest_time = after_timestamp
 
@@ -95,7 +96,6 @@ def find_latest_csv(after_timestamp):
 
     return str(latest_csv) if latest_csv else None
 
-
 def run_step(step_num, description, script_name, extra_args=None, csv_path=None):
     """Run a single pipeline step and always stop on failure."""
     write_log(f"\n=== STEP {step_num}: {description} ===")
@@ -110,7 +110,6 @@ def run_step(step_num, description, script_name, extra_args=None, csv_path=None)
 
     write_log(f"[✅] {description} succeeded.\n")
     return True
-
 
 def main():
     if not args.url:
@@ -171,9 +170,8 @@ def main():
                 write_log(f"{folder} — {track_count} tracks")
 
     # === TEST-MODE CLEANUP ===
-    if args.test_mode:
+    if args.test_mode and not args.no_cleanup:
         remove_tmp_dir()
-
 
 write_log(f"[⚙️ MODE] Running in {'TEST-MODE' if args.test_mode else 'real'} mode.")
 

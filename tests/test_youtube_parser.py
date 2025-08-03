@@ -2,23 +2,23 @@ import subprocess
 from pathlib import Path
 import shutil
 
-def test_wiki_parser_test_mode():
-    """Test Wikipedia album parser in test-mode with cleanup skipped."""
-    url = "https://en.wikipedia.org/wiki/Hydra_(Within_Temptation_album)"
+def test_youtube_parser_test_mode():
+    """Test YouTube single-track parser in test-mode with cleanup skipped."""
+    url = "https://www.youtube.com/watch?v=3JZ_D3ELwOQ"  # Example track
     cmd = [
         "python3", "run_all.py",
-        "--type", "wiki",
+        "--type", "youtube",
         "--url", url,
         "--summary",
         "--test-mode",
-        "--no-cleanup"  # prevent deletion so we can check CSV
+        "--no-cleanup"  # keep temp folder for verification
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     # Ensure it ran successfully
     assert result.returncode == 0, f"Process failed: {result.stderr}"
 
-    # Verify that parsing step logged success
+    # Verify parsing step succeeded
     assert "STEP 1" in result.stdout
     assert "succeeded" in result.stdout.lower()
 
@@ -26,9 +26,9 @@ def test_wiki_parser_test_mode():
     tmp_dir = Path("/tmp/music_downloader_test")
     csv_files = list(tmp_dir.glob("**/*.csv"))
 
-    # Ensure at least one CSV existed
+    # Ensure at least one CSV file exists
     assert len(csv_files) > 0, "Expected CSV file in test-mode temp folder"
 
-    # Cleanup manually (TO DO: automate cleanup in future)
+    # Cleanup manually (TO DO: automate in future)
     if tmp_dir.exists():
         shutil.rmtree(tmp_dir)

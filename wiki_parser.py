@@ -1,3 +1,5 @@
+# wiki_parser.py
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -5,24 +7,22 @@ import re
 import os
 import argparse
 from urllib.parse import urlparse, urlunparse
-
+from pathlib import Path
 
 def clean_wiki_url(original_url: str) -> str:
     parsed = urlparse(original_url)
     cleaned_url = urlunparse((
         parsed.scheme,
         parsed.netloc,
-        parsed.path,   # keep only path, drop query/fragment
+        parsed.path,
         '',
         '',
         ''
     ))
     return cleaned_url
 
-
 def clean_album_title(raw_title: str) -> str:
     return re.sub(r'\s*\(.*?\)\s*', '', raw_title).strip()
-
 
 def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: bool = False, artist_name: str = None) -> pd.DataFrame:
     wikipedia_url = clean_wiki_url(wikipedia_url)
@@ -117,42 +117,41 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
     safe_artist = artist_name.replace('/', '-').replace(' ', '_')
     album_folder_name = f"{safe_artist}_{safe_album}"
 
-    # === Handle test-mode ===
     if test_mode:
-        album_folder_path = os.path.join("/tmp/music_downloader_dryrun", album_folder_name)
-        os.makedirs(album_folder_path, exist_ok=True)
-        csv_filename = f"{safe_album}_{safe_artist}_album_tracks.csv"
-        full_csv_path = os.path.join(album_folder_path, csv_filename)
-        df.to_csv(full_csv_path, index=False)
-        print(f"\n[TEST-MODE] CSV saved to: {full_csv_path}")
-        return df
+        album_folder_path = Path("/tmp/music_downloader_test") / album_folder_name
+        print(f"[TEST-MODE] Using temporary output path: {album_folder_path}")
+    else:
+        album_folder_path = Path(base_music_dir) / album_folder_name
+        print(f"[✓] Output directory: {album_folder_path}")
 
-    # === Normal mode ===
-    album_folder_path = os.path.join(base_music_dir, album_folder_name)
     os.makedirs(album_folder_path, exist_ok=True)
+
     csv_filename = f"{safe_album}_{safe_artist}_album_tracks.csv"
-    full_csv_path = os.path.join(album_folder_path, csv_filename)
+    full_csv_path = album_folder_path / csv_filename
     df.to_csv(full_csv_path, index=False)
-    print(f"\n[✓] Saved: {csv_filename} → {album_folder_path}")
+
+    if test_mode:
+        print(f"[TEST-MODE] CSV saved to: {full_csv_path}")
+    else:
+        print(f"[✓] CSV saved to: {full_csv_path}")
 
     return df
 
-
-# === CLI ===
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Universal music metadata parser")
-    parser.add_argument('--type', type=str, default="wiki", help='Type of source: wiki | youtube | apple | google')
-    parser.add_argument('--url', type=str, required=True, help='Source URL')
-    parser.add_argument('--artist', type=str, help='Artist name (optional for some types)')
-    parser.add_argument('--test-mode', action='store_true', help='Run in isolated /tmp test folder')
+    parser = argparse.ArgumentParser(description="Wikipedia album parser")
+    parser.add_argument('--url', type=str, required=True, help='Wikipedia album URL')
+    parser.add_argument('--artist', type=str, help='Artist name (optional)')
+    parser.add_argument('--test-mode', action='store_true', help='Enable test mode output to /tmp/music_downloader_test')
     args = parser.parse_args()
 
     base_music_dir = os.path.expanduser("~/Music Downloader")
 
-    if args.type == "wiki":
-        df = extract_album_data_wiki(args.url, base_music_dir, test_mode=args.test_mode, artist_name=args.artist)
-    else:
-        raise NotImplementedError(f"Parser for type '{args.type}' is not implemented yet.")
+    df = extract_album_data_wiki(
+        args.url,
+        base_music_dir,
+        test_mode=args.test_mode,
+        artist_name=args.artist
+    )
 
     print("\nExtracted Album Data:\n")
     print(df)

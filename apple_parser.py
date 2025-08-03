@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import sys
 from urllib.parse import urlparse, urlunparse
+from pathlib import Path
 
 def clean_apple_url(original_url: str) -> str:
     parsed = urlparse(original_url)
@@ -70,12 +71,11 @@ def seconds_to_mmss(seconds):
 def main():
     parser = argparse.ArgumentParser(description="Parse Apple Music album pages.")
     parser.add_argument("--url", required=True, help="Apple Music album URL")
-    parser.add_argument("--test-mode", action="store_true", help="Test-mode: save to /tmp and exit early if API fails")
+    parser.add_argument("--test-mode", action="store_true", help="Test-mode: save to /tmp/music_downloader_test")
     args = parser.parse_args()
 
     raw_url = args.url
     cleaned_url = clean_apple_url(raw_url)
-
     print(f"[DEBUG] Cleaned URL: {cleaned_url}")
 
     album_name, artist_name, tracks = extract_album_info(cleaned_url)
@@ -94,15 +94,16 @@ def main():
     safe_artist_name = re.sub(r"\W+", "_", artist_name)[:40]
     filename = f"{safe_artist_name}_{safe_album_name}_track.csv"
 
+    # Correct temp path for test mode
     if args.test_mode:
-        folder_path = os.path.join("/tmp/music_downloader_dryrun", f"{safe_artist_name}_{safe_album_name}")
+        folder_path = Path("/tmp/music_downloader_test") / f"{safe_artist_name}_{safe_album_name}"
         print(f"[TEST-MODE] Using temporary output path: {folder_path}")
     else:
-        folder_path = os.path.join(os.path.expanduser("~/Music Downloader"), f"{safe_artist_name}_{safe_album_name}")
+        folder_path = Path(os.path.expanduser("~/Music Downloader")) / f"{safe_artist_name}_{safe_album_name}"
         print(f"[✓] Output directory: {folder_path}")
 
     os.makedirs(folder_path, exist_ok=True)
-    filepath = os.path.join(folder_path, filename)
+    filepath = folder_path / filename
 
     df.to_csv(filepath, index=False)
     if args.test_mode:
