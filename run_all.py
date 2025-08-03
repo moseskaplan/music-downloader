@@ -19,6 +19,7 @@ parser.add_argument("--skip-download", action="store_true", help="Skip track_dow
 parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
 parser.add_argument("--dry-run", action="store_true", default=False, help="Run in dry-run mode")
+parser.add_argument("--test-mode", action="store_true", help="Run in test mode (cleanup after run and may use mock data).")
 args = parser.parse_args()
 
 
