@@ -17,10 +17,10 @@ parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"], de
 parser.add_argument("--skip-parse", action="store_true", help="Skip parser step")
 parser.add_argument("--skip-download", action="store_true", help="Skip track_download.py")
 parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
-parser.add_argument("--cascade", action="store_true", help="Stop on first failure")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
 parser.add_argument("--dry-run", action="store_true", default=False, help="Run in dry-run mode")
 args = parser.parse_args()
+
 
 is_dry_run = args.dry_run
 
@@ -89,8 +89,8 @@ def find_latest_csv(after_timestamp):
     return str(latest_csv) if latest_csv else None
 
 
-def run_step(step_num, description, script_name, extra_args=None, dry_run=False, csv_path=None, cascade=True):
-    """Run a single pipeline step."""
+def run_step(step_num, description, script_name, extra_args=None, dry_run=False, csv_path=None):
+    """Run a single pipeline step and always stop on failure."""
     mode_label = "dry-run" if dry_run else "real"
     write_log(f"\n=== STEP {step_num}: {description} ({mode_label}) ===")
 
@@ -101,7 +101,7 @@ def run_step(step_num, description, script_name, extra_args=None, dry_run=False,
         args_list.append("--dry-run")
 
     success = run_script(script_name, *args_list)
-    if cascade and not success:
+    if not success:
         write_log(f"[🛑 STOPPED] {description} {mode_label} failed.")
         return False
 
@@ -135,8 +135,8 @@ def main():
 
         # === STEP 1: Parse ===
         if not args.skip_parse:
-            if not run_step(1, parser_script, parser_script, ["--url", url],
-                            dry_run=is_dry_run, cascade=args.cascade):
+            if not run_step(1, "Parsing", parser_script, ["--url", url],
+                            dry_run=is_dry_run):
                 continue
             csv_path = find_latest_csv(pre_parse_time)
             if not csv_path:
@@ -146,13 +146,13 @@ def main():
         # === STEP 2: Download ===
         if not args.skip_download:
             if not run_step(2, "track_download.py", "track_download.py", [csv_path],
-                            dry_run=is_dry_run, cascade=args.cascade):
+                            dry_run=is_dry_run):
                 continue
 
         # === STEP 3: Tag ===
         if not args.skip_tag:
             if not run_step(3, "track_metadata_cleanup.py", "track_metadata_cleanup.py", [csv_path],
-                            dry_run=is_dry_run, cascade=args.cascade):
+                            dry_run=is_dry_run):
                 continue
 
         all_csv_paths.append(csv_path)
