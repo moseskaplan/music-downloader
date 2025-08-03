@@ -4,6 +4,8 @@ import pandas as pd
 from youtubesearchpython import VideosSearch
 import yt_dlp
 from datetime import timedelta
+from pathlib import Path
+
 
 def parse_duration_str(duration_str):
     try:
@@ -12,10 +14,12 @@ def parse_duration_str(duration_str):
     except:
         return None
 
+
 def clean_filename(text):
     return "".join(c for c in text if c.isalnum() or c in " -_").strip()
 
-def download_album_tracks(csv_path, base_music_dir, dry_run=False):
+
+def download_album_tracks(csv_path, base_music_dir: Path, test_mode=False):
     df = pd.read_csv(csv_path, dtype=str)
     if df.empty:
         print(f"[!] CSV is empty: {csv_path}")
@@ -66,15 +70,15 @@ def download_album_tracks(csv_path, base_music_dir, dry_run=False):
         else:
             filename = f"{str(int(track_number)).zfill(2)} - {artist} - {title}.mp3"
 
-        full_path = os.path.join(album_folder, filename + ".mp3")
+        full_path = os.path.join(album_folder, filename)
 
-        if dry_run:
-            print(f"[{idx}/{total_tracks}] [DRY-RUN] Would save: {full_path}")
+        if test_mode:
+            print(f"[{idx}/{total_tracks}] [TEST-MODE] Would save: {full_path}")
             continue
 
         ydl_opts = {
             'format': 'bestaudio/best',
-            'outtmpl': os.path.join(album_folder, filename),
+            'outtmpl': os.path.join(album_folder, filename.replace(".mp3", "")),
             'quiet': True,
             'noplaylist': True,
             'postprocessors': [{
@@ -85,10 +89,10 @@ def download_album_tracks(csv_path, base_music_dir, dry_run=False):
         }
 
         try:
-            print(f"[{idx}/{total_tracks}] [↓] Downloading: {filename}.mp3 ...")
+            print(f"[{idx}/{total_tracks}] [↓] Downloading: {filename} ...")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([best_match])
-            print(f"[{idx}/{total_tracks}] [✓] Saved: {filename}.mp3 to {album_folder}\n")
+            print(f"[{idx}/{total_tracks}] [✓] Saved: {filename} to {album_folder}\n")
         except Exception as e:
             print(f"[{idx}/{total_tracks}] [!] Error downloading {title}: {e}")
             continue
@@ -98,11 +102,15 @@ def download_album_tracks(csv_path, base_music_dir, dry_run=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download MP3 tracks for an album using a CSV tracklist.")
     parser.add_argument("csv_path", help="Path to the album tracklist CSV")
-    parser.add_argument("--dry-run", action="store_true", help="Preview what would be downloaded without saving")
+    parser.add_argument("--test-mode", action="store_true", help="Preview actions without downloading files")
     args = parser.parse_args()
 
-    base_music_dir = os.path.expanduser("~/Music Downloader")
+    if args.test_mode:
+        base_music_dir = Path("/tmp/music_downloader_test")
+    else:
+        base_music_dir = Path(os.path.expanduser("~/Music Downloader"))
+
     if not os.path.exists(args.csv_path):
         print(f"[!] File not found: {args.csv_path}")
     else:
-        download_album_tracks(args.csv_path, base_music_dir, dry_run=args.dry_run)
+        download_album_tracks(args.csv_path, base_music_dir, test_mode=args.test_mode)

@@ -5,24 +5,20 @@ import re
 import argparse
 import os
 import pandas as pd
-
+import sys
 from urllib.parse import urlparse, urlunparse
 
 def clean_apple_url(original_url: str) -> str:
     parsed = urlparse(original_url)
-
-    # Rebuild URL with no query parameters
     cleaned_url = urlunparse((
         parsed.scheme,
         parsed.netloc,
         parsed.path,
         parsed.params,
-        "",  # ← strip query
+        "",  # strip query
         parsed.fragment
     ))
-
     return cleaned_url
-
 
 def extract_album_id(url):
     match = re.search(r'/album/.*?/(\d+)', url)
@@ -74,7 +70,7 @@ def seconds_to_mmss(seconds):
 def main():
     parser = argparse.ArgumentParser(description="Parse Apple Music album pages.")
     parser.add_argument("--url", required=True, help="Apple Music album URL")
-    parser.add_argument("--dry-run", action="store_true", help="Only simulate and log actions.")
+    parser.add_argument("--test-mode", action="store_true", help="Test-mode: save to /tmp and exit early if API fails")
     args = parser.parse_args()
 
     raw_url = args.url
@@ -85,8 +81,12 @@ def main():
     album_name, artist_name, tracks = extract_album_info(cleaned_url)
 
     if not tracks:
-        print("[!] No tracks found.")
-        return
+        if args.test_mode:
+            print("[TEST-MODE] No track data returned — album may be restricted on Apple Music API.")
+            sys.exit(1)
+        else:
+            print("[!] No tracks found. Parsing failed.")
+            sys.exit(1)
 
     df = pd.DataFrame(tracks)
 
@@ -94,9 +94,9 @@ def main():
     safe_artist_name = re.sub(r"\W+", "_", artist_name)[:40]
     filename = f"{safe_artist_name}_{safe_album_name}_track.csv"
 
-    if args.dry_run:
+    if args.test_mode:
         folder_path = os.path.join("/tmp/music_downloader_dryrun", f"{safe_artist_name}_{safe_album_name}")
-        print(f"[DRY-RUN] Using temporary output path: {folder_path}")
+        print(f"[TEST-MODE] Using temporary output path: {folder_path}")
     else:
         folder_path = os.path.join(os.path.expanduser("~/Music Downloader"), f"{safe_artist_name}_{safe_album_name}")
         print(f"[✓] Output directory: {folder_path}")
@@ -105,11 +105,13 @@ def main():
     filepath = os.path.join(folder_path, filename)
 
     df.to_csv(filepath, index=False)
-    print(f"[✓] CSV saved to: {filepath}")
+    if args.test_mode:
+        print(f"[TEST-MODE] CSV saved to: {filepath}")
+    else:
+        print(f"[✓] CSV saved to: {filepath}")
 
     print("\nExtracted Track Data:\n")
     print(df)
-
 
 if __name__ == "__main__":
     main()
