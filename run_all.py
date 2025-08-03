@@ -1,5 +1,3 @@
-# run_all.py
-
 import subprocess
 import argparse
 import sys
@@ -19,7 +17,7 @@ parser.add_argument("--skip-download", action="store_true", help="Skip track_dow
 parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
 parser.add_argument("--test-mode", action="store_true", help="Enable test mode (always cleans up temp data at end)")
-parser.add_argument("--no-cleanup", action="store_true", help="Skip cleanup at the end (for pytest runs)")
+parser.add_argument("--no-cleanup", action="store_true", help="Skip cleanup of temp folder in test mode (for debugging)")
 args = parser.parse_args()
 
 # === CONFIG ===
