@@ -10,8 +10,9 @@ import shutil
 # === CLI args ===
 parser = argparse.ArgumentParser(description="Cascade music downloader scripts.")
 parser.add_argument("--url", nargs="+", help="One or more album/song URLs")
-parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"], default="wiki",
-                    help="Source type (wiki, youtube, search, apple)")
+# Allow --type to be optional. If omitted, run_all will auto-detect the correct parser
+parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"],
+                    help="Source type (wiki, youtube, search, apple). If omitted, the type will be inferred from the URL.")
 parser.add_argument("--skip-parse", action="store_true", help="Skip parser step")
 parser.add_argument("--skip-download", action="store_true", help="Skip track_download.py")
 parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
@@ -94,6 +95,22 @@ def find_latest_csv(after_timestamp):
 
     return str(latest_csv) if latest_csv else None
 
+def detect_type(url: str) -> str:
+    """Infer the parser type from the given URL.
+
+    Returns one of "wiki", "youtube", "apple", or "search". The function
+    examines the domain to make a best guess. If none match, it falls back
+    to "search".
+    """
+    lower = url.lower()
+    if "wikipedia.org" in lower:
+        return "wiki"
+    if "youtube.com" in lower or "youtu.be" in lower:
+        return "youtube"
+    if "music.apple.com" in lower or "itunes.apple.com" in lower:
+        return "apple"
+    return "search"
+
 def run_step(step_num, description, script_name, extra_args=None, csv_path=None):
     """Run a single pipeline step and always stop on failure."""
     write_log(f"\n=== STEP {step_num}: {description} ===")
@@ -121,9 +138,15 @@ def main():
         "apple": "apple_parser.py"
     }
 
-    parser_script = parser_script_map.get(args.type)
+    # If --type was not provided, infer it from the first URL
+    parser_type = args.type
+    if parser_type is None:
+        parser_type = detect_type(args.url[0])
+        write_log(f"[INFO] Auto‑detected type '{parser_type}' for URL: {args.url[0]}")
+
+    parser_script = parser_script_map.get(parser_type)
     if not parser_script:
-        write_log(f"[🛑 ERROR] Unknown type: {args.type}")
+        write_log(f"[🛑 ERROR] Unknown type: {parser_type}")
         sys.exit(1)
 
     all_csv_paths = []
