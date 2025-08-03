@@ -54,16 +54,23 @@ def extract_track_data(youtube_url: str, base_music_dir: str, dry_run: bool = Fa
     safe_artist = artist.replace('/', '-').replace(' ', '_')
     safe_title = title.replace('/', '-').replace(' ', '_')
     folder_name = f"{safe_artist}_{safe_title}"
-    folder_path = os.path.join(base_music_dir, folder_name)
+
+    # For dry-run, store in /tmp instead of real music folder
+    if dry_run:
+        folder_path = os.path.join("/tmp/music_downloader_dryrun", folder_name)
+        print(f"[DRY-RUN] Using temporary output path: {folder_path}")
+    else:
+        folder_path = os.path.join(base_music_dir, folder_name)
+        print(f"[✓] Output directory: {folder_path}")
+
     os.makedirs(folder_path, exist_ok=True)
 
     csv_path = os.path.join(folder_path, f"{safe_title}_{safe_artist}_track.csv")
 
-    if not dry_run:
-        df.to_csv(csv_path, index=False)
-        print(f"[✓] Saved: {csv_path}")
-    else:
-        print(f"[DRY-RUN] Would save to: {csv_path}")
+    # Always save CSV so run_all.py can find it
+    df.to_csv(csv_path, index=False)
+    print(f"[✓] CSV saved to: {csv_path}" if not dry_run else f"[DRY-RUN] CSV saved to: {csv_path}")
+
 
     return df
 
