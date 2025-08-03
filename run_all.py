@@ -13,8 +13,8 @@ parser = argparse.ArgumentParser(description="Cascade music downloader scripts."
 parser.add_argument("--url", nargs="+", help="One or more album/song URLs")
 parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"], default="wiki", help="Source type (wiki, youtube, search)")
 parser.add_argument("--skip-parse", action="store_true", help="Skip wiki_parser.py or equivalent")
-parser.add_argument("--skip-download", action="store_true", help="Skip download_album_tracks.py")
-parser.add_argument("--skip-tag", action="store_true", help="Skip tag_album_tracks.py")
+parser.add_argument("--skip-download", action="store_true", help="Skip track_download.py")
+parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
 parser.add_argument("--cascade", action="store_true", help="Run sequentially and stop on failure.")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
 parser.add_argument("--dry-run", action="store_true", default=False, help="Run dry-run steps before real steps")
@@ -124,30 +124,30 @@ def main():
         # Step 2: Download
         if not args.skip_download:
             if args.dry_run:
-                write_log("\n=== STEP 2: download_album_tracks.py (dry-run) ===")
+                write_log("\n=== STEP 2: track_download.py (dry-run) ===")
                 if not csv_path:
                     csv_path = input("Enter path to album CSV: ").strip()
-                success = run_script("download_album_tracks.py", csv_path, "--dry-run")
+                success = run_script("track_download.py", csv_path, "--dry-run")
                 if args.cascade and not success:
-                    write_log("[🛑 STOPPED] download_album_tracks.py dry-run failed.")
+                    write_log("[🛑 STOPPED] track_download.py dry-run failed.")
                     continue
-                write_log("[✅] download_album_tracks.py dry-run succeeded.\n")
+                write_log("[✅] track_download.py dry-run succeeded.\n")
 
-            write_log("\n=== STEP 2: download_album_tracks.py (real) ===")
-            success = run_script("download_album_tracks.py", csv_path)
+            write_log("\n=== STEP 2: track_download.py (real) ===")
+            success = run_script("track_download.py", csv_path)
             if args.cascade and not success:
-                write_log("[🛑 STOPPED] download_album_tracks.py real run failed.")
+                write_log("[🛑 STOPPED] track_download.py real run failed.")
                 continue
-            write_log("[✅] download_album_tracks.py real run succeeded.\n")
+            write_log("[✅] track_download.py real run succeeded.\n")
 
         # Step 3: Tag
         if not args.skip_tag:
-            write_log("\n=== STEP 3: tag_album_tracks.py ===")
-            success = run_script("tag_album_tracks.py", csv_path)
+            write_log("\n=== STEP 3: track_metadata_cleanup.py ===")
+            success = run_script("track_metadata_cleanup.py", csv_path)
             if args.cascade and not success:
-                write_log("[🛑 STOPPED] tag_album_tracks.py failed.")
+                write_log("[🛑 STOPPED] track_metadata_cleanup.py failed.")
                 continue
-            write_log("[✅] tag_album_tracks.py succeeded.\n")
+            write_log("[✅] track_metadata_cleanup.py succeeded.\n")
 
         all_csv_paths.append(csv_path)
 
