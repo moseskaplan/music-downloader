@@ -25,7 +25,6 @@ def clean_apple_url(original_url: str) -> str:
 
 
 def extract_album_id(url):
-    # Extract the album ID from the URL (the last number)
     match = re.search(r'/album/.*?/(\d+)', url)
     return match.group(1) if match else None
 
@@ -93,19 +92,20 @@ def main():
 
     safe_album_name = re.sub(r"\W+", "_", album_name)[:40]
     safe_artist_name = re.sub(r"\W+", "_", artist_name)[:40]
-
-    folder_name = f"{safe_artist_name}_{safe_album_name}"
-    folder_path = os.path.join(os.path.expanduser("~/Music Downloader"), folder_name)
-    os.makedirs(folder_path, exist_ok=True)
-
     filename = f"{safe_artist_name}_{safe_album_name}_track.csv"
-    filepath = os.path.join(folder_path, filename)
 
     if args.dry_run:
-        print(f"[DRY-RUN] Would save to: {filepath}")
+        folder_path = os.path.join("/tmp/music_downloader_dryrun", f"{safe_artist_name}_{safe_album_name}")
+        print(f"[DRY-RUN] Using temporary output path: {folder_path}")
     else:
-        df.to_csv(filepath, index=False)
-        print(f"[✓] Saved: {filepath}")
+        folder_path = os.path.join(os.path.expanduser("~/Music Downloader"), f"{safe_artist_name}_{safe_album_name}")
+        print(f"[✓] Output directory: {folder_path}")
+
+    os.makedirs(folder_path, exist_ok=True)
+    filepath = os.path.join(folder_path, filename)
+
+    df.to_csv(filepath, index=False)
+    print(f"[✓] CSV saved to: {filepath}")
 
     print("\nExtracted Track Data:\n")
     print(df)

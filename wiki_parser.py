@@ -120,11 +120,22 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, dry_run: bo
     safe_album = album_title.replace('/', '-').replace(' ', '_')
     safe_artist = artist_name.replace('/', '-').replace(' ', '_')
     album_folder_name = f"{safe_artist}_{safe_album}"
-    album_folder_path = os.path.join(base_music_dir, album_folder_name)
+
+    # Handle dry-run: write to /tmp instead of base_music_dir
+    if dry_run:
+        album_folder_path = os.path.join("/tmp/music_downloader_dryrun", album_folder_name)
+    else:
+        album_folder_path = os.path.join(base_music_dir, album_folder_name)
+
+    os.makedirs(album_folder_path, exist_ok=True)
+
     csv_filename = f"{safe_album}_{safe_artist}_album_tracks.csv"
     full_csv_path = os.path.join(album_folder_path, csv_filename)
 
-    print(f"\n[DRY-RUN]" if dry_run else f"\n[✓] Saved: {csv_filename} → {album_folder_path}")
+    # Save CSV even during dry-run
+    df.to_csv(full_csv_path, index=False)
+
+    print(f"\n[DRY-RUN] CSV saved to: {full_csv_path}" if dry_run else f"\n[✓] Saved: {csv_filename} → {album_folder_path}")
 
     if not dry_run:
         os.makedirs(album_folder_path, exist_ok=True)

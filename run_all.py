@@ -7,18 +7,22 @@ import os
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
+import shutil
 
 # === CLI args ===
 parser = argparse.ArgumentParser(description="Cascade music downloader scripts.")
 parser.add_argument("--url", nargs="+", help="One or more album/song URLs")
-parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"], default="wiki", help="Source type (wiki, youtube, search)")
-parser.add_argument("--skip-parse", action="store_true", help="Skip wiki_parser.py or equivalent")
+parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"], default="wiki",
+                    help="Source type (wiki, youtube, search, apple)")
+parser.add_argument("--skip-parse", action="store_true", help="Skip parser step")
 parser.add_argument("--skip-download", action="store_true", help="Skip track_download.py")
 parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
-parser.add_argument("--cascade", action="store_true", help="Run sequentially and stop on failure.")
+parser.add_argument("--cascade", action="store_true", help="Stop on first failure")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
-parser.add_argument("--dry-run", action="store_true", default=False, help="Run dry-run steps before real steps")
+parser.add_argument("--dry-run", action="store_true", default=False, help="Run in dry-run mode")
 args = parser.parse_args()
+
+is_dry_run = args.dry_run
 
 # === CONFIG ===
 base_dir = os.path.expanduser("~/Music Downloader")
@@ -35,6 +39,18 @@ def write_log(message):
     with open(log_path, "a") as f:
         f.write(str(message) + "\n")
     print(message, flush=True)
+
+
+def clear_dryrun_tmp():
+    tmp_dir = Path("/tmp/music_downloader_dryrun")
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    write_log(f"[DRY-RUN] Cleared temp cache: {tmp_dir}")
+
+
+if is_dry_run:
+    clear_dryrun_tmp()
 
 
 def run_script(script_name, *args, required=True):
@@ -56,11 +72,14 @@ def run_script(script_name, *args, required=True):
 
 
 def find_latest_csv(after_timestamp):
-    music_path = Path(base_dir)
+    search_dir = Path("/tmp/music_downloader_dryrun") if is_dry_run else Path(base_dir)
     latest_csv = None
     latest_time = after_timestamp
 
-    for folder in music_path.glob("*_*"):
+    if not search_dir.exists():
+        return None
+
+    for folder in search_dir.glob("*_*"):
         for csv_file in folder.glob("*.csv"):
             mod_time = csv_file.stat().st_mtime
             if mod_time > latest_time:
@@ -68,6 +87,26 @@ def find_latest_csv(after_timestamp):
                 latest_csv = csv_file
 
     return str(latest_csv) if latest_csv else None
+
+
+def run_step(step_num, description, script_name, extra_args=None, dry_run=False, csv_path=None, cascade=True):
+    """Run a single pipeline step."""
+    mode_label = "dry-run" if dry_run else "real"
+    write_log(f"\n=== STEP {step_num}: {description} ({mode_label}) ===")
+
+    args_list = extra_args or []
+    if csv_path:
+        args_list.insert(0, csv_path)
+    if dry_run:
+        args_list.append("--dry-run")
+
+    success = run_script(script_name, *args_list)
+    if cascade and not success:
+        write_log(f"[🛑 STOPPED] {description} {mode_label} failed.")
+        return False
+
+    write_log(f"[✅] {description} {mode_label} succeeded.\n")
+    return True
 
 
 def main():
@@ -80,7 +119,6 @@ def main():
         "youtube": "youtube_parser.py",
         "search": "search_parser.py",
         "apple": "apple_parser.py"
-        # Future: add "google", "apple", etc.
     }
 
     parser_script = parser_script_map.get(args.type)
@@ -92,79 +130,48 @@ def main():
 
     for url in args.url:
         write_log(f"\n🔗 Processing URL: {url}")
-        success = True
         csv_path = None
+        pre_parse_time = datetime.now().timestamp()
 
+        # === STEP 1: Parse ===
         if not args.skip_parse:
-            pre_parse_time = datetime.now().timestamp()
-
-            # Step 1: Dry run parse
-            if args.dry_run:
-                write_log(f"\n=== STEP 1: {parser_script} (dry-run) ===")
-                success = run_script(parser_script, "--dry-run", "--url", url)
-                if args.cascade and not success:
-                    write_log("[🛑 STOPPED] Dry-run parsing failed.")
-                    continue
-                write_log("[✅] Dry-run succeeded.\n")
-
-            # Step 1: Real parse
-            write_log(f"\n=== STEP 1: {parser_script} (real) ===")
-            success = run_script(parser_script, "--url", url)
-            if args.cascade and not success:
-                write_log("[🛑 STOPPED] Real parsing failed.")
+            if not run_step(1, parser_script, parser_script, ["--url", url],
+                            dry_run=is_dry_run, cascade=args.cascade):
                 continue
-            write_log("[✅] Real run succeeded.\n")
-
-            # Locate the new CSV
             csv_path = find_latest_csv(pre_parse_time)
             if not csv_path:
                 write_log("[🛑 STOPPED] Could not locate new CSV output.")
                 continue
 
-        # Step 2: Download
+        # === STEP 2: Download ===
         if not args.skip_download:
-            if args.dry_run:
-                write_log("\n=== STEP 2: track_download.py (dry-run) ===")
-                if not csv_path:
-                    csv_path = input("Enter path to album CSV: ").strip()
-                success = run_script("track_download.py", csv_path, "--dry-run")
-                if args.cascade and not success:
-                    write_log("[🛑 STOPPED] track_download.py dry-run failed.")
-                    continue
-                write_log("[✅] track_download.py dry-run succeeded.\n")
-
-            write_log("\n=== STEP 2: track_download.py (real) ===")
-            success = run_script("track_download.py", csv_path)
-            if args.cascade and not success:
-                write_log("[🛑 STOPPED] track_download.py real run failed.")
+            if not run_step(2, "track_download.py", "track_download.py", [csv_path],
+                            dry_run=is_dry_run, cascade=args.cascade):
                 continue
-            write_log("[✅] track_download.py real run succeeded.\n")
 
-        # Step 3: Tag
+        # === STEP 3: Tag ===
         if not args.skip_tag:
-            write_log("\n=== STEP 3: track_metadata_cleanup.py ===")
-            success = run_script("track_metadata_cleanup.py", csv_path)
-            if args.cascade and not success:
-                write_log("[🛑 STOPPED] track_metadata_cleanup.py failed.")
+            if not run_step(3, "track_metadata_cleanup.py", "track_metadata_cleanup.py", [csv_path],
+                            dry_run=is_dry_run, cascade=args.cascade):
                 continue
-            write_log("[✅] track_metadata_cleanup.py succeeded.\n")
 
         all_csv_paths.append(csv_path)
 
-    # Summary
+    # === Summary ===
     if args.summary:
         write_log("\n=== SUMMARY ===")
         for path in all_csv_paths:
-            if not path:
-                continue
-            folder = Path(path).parent.name
-            try:
-                df = pd.read_csv(path)
-                track_count = len(df)
-            except Exception:
-                track_count = "?"
-            write_log(f"{folder} — {track_count} tracks")
+            if path:
+                folder = Path(path).parent.name
+                try:
+                    df = pd.read_csv(path)
+                    track_count = len(df)
+                except Exception:
+                    track_count = "?"
+                write_log(f"{folder} — {track_count} tracks")
 
+
+write_log(f"[⚙️ MODE] Running in {'dry-run' if is_dry_run else 'real'} mode.")
 
 if __name__ == "__main__":
     main()
