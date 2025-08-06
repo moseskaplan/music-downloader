@@ -81,23 +81,68 @@ def clean_youtube_url(original_url: str) -> str:
 def clean_track_title(title: str) -> str:
     """Normalize track titles by removing boilerplate and formatting featured artists.
 
-    Removes phrases like "Official Video" or "Official Audio", normalizes
-    "feat"/"featuring" patterns into "(feat. X)", collapses extra spaces and
-    trims stray hyphens.
+    This helper performs several operations to produce a clean, human‑friendly
+    track title:
+
+      * Removes common boilerplate phrases like "Official Video", "Official Audio",
+        or "Lyrics" regardless of case.
+      * Strips out any bracketed segments (e.g., "[Official Video]"), which are
+        often used for quality tags or video descriptors.
+      * Removes leftover empty parentheses or brackets that may result from
+        stripping descriptors.
+      * Normalizes any "feat" or "featuring" clauses into a single
+        "(feat. X)" suffix. The original "feat" segment is removed wherever
+        it appears in the title, whether inside or outside of parentheses.
+      * Collapses multiple consecutive whitespace characters into a single
+        space and trims stray hyphens at the edges.
+
+    Args:
+        title: The raw track title string extracted from a YouTube video.
+
+    Returns:
+        A cleaned track title string suitable for display and filename usage.
     """
     if not title:
         return title
-    # Remove common boilerplate terms (case-insensitive)
-    title = re.sub(r"\bOfficial\s+Video\b", "", title, flags=re.IGNORECASE)
-    title = re.sub(r"\bOfficial\s+Audio\b", "", title, flags=re.IGNORECASE)
-    title = re.sub(r"\bLyrics?\b", "", title, flags=re.IGNORECASE)
-    # Normalize 'feat' into parentheses
-    feat_match = re.search(r"feat\.?\s+([^()\-]+)", title, flags=re.IGNORECASE)
-    if feat_match:
-        featured = feat_match.group(1).strip()
-        title = re.sub(r"feat\.?\s+" + re.escape(featured), "", title, flags=re.IGNORECASE).strip()
-        title = f"{title.strip()} (feat. {featured})"
-    # Collapse whitespace and trim stray hyphens
+
+    # Remove explicit phrases regardless of location (case-insensitive)
+    for term in ["Official Video", "Official Audio", "Lyrics", "Lyric Video", "Audio"]:
+        title = re.sub(rf"\b{re.escape(term)}\b", "", title, flags=re.IGNORECASE)
+
+    # Remove any bracketed segments entirely (e.g., [Official Video], [HD])
+    title = re.sub(r"\[[^\]]*\]", "", title)
+
+    # Remove empty parentheses or brackets left after stripping
+    title = re.sub(r"\(\s*\)", "", title)
+    title = re.sub(r"\[\s*\]", "", title)
+
+    # Normalize 'feat' clauses. First handle cases where 'feat' appears in
+    # parentheses, e.g. "(feat. Artist)". Extract the artist name and remove the
+    # entire segment. We'll append it back at the end.
+    featured = None
+    # Match '(feat ...)' ignoring case
+    feat_paren = re.search(r"\(\s*feat(?:uring)?\.?(.*?)\)", title, flags=re.IGNORECASE)
+    if feat_paren:
+        featured = feat_paren.group(1).strip()
+        # Remove the entire '(feat...)' segment
+        title = feat_paren.re.sub("", title).strip()
+    else:
+        # Match 'feat. Artist' outside of parentheses
+        feat_inline = re.search(r"feat(?:uring)?\.?(.*)", title, flags=re.IGNORECASE)
+        if feat_inline:
+            featured = feat_inline.group(1).strip()
+            # Remove the 'feat...' portion from the title
+            title = feat_inline.re.sub("", title).strip()
+
+    # Collapse multiple spaces into one
     title = " ".join(title.split())
-    title = title.strip("- ")
+
+    # Trim stray hyphens and whitespace at the ends
+    title = title.strip(" -")
+
+    # Append the normalized '(feat. ...)' if we captured a featured artist
+    if featured:
+        # Ensure there isn't already a trailing parenthesis before adding
+        title = f"{title} (feat. {featured})" if title else f"(feat. {featured})"
+
     return title
