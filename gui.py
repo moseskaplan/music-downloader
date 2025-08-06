@@ -6,19 +6,26 @@ import os
 def run_downloader():
     """Callback for the Run Downloader button.
 
-    This function reads the URL and source type from the GUI and executes
-    the pipeline via run_all.py. Dry‑run and summary options have been
-    removed from the UI for end‑users; those modes remain available via
-    CLI for developers and testers.
+    This function collects one or more URLs from the multi‑line text box and
+    executes the pipeline via run_all.py. Users can paste multiple links
+    separated by newlines or commas. The type is inferred automatically
+    for each URL by run_all. Developer options like dry‑run or summary
+    remain available via CLI.
     """
-    url = url_entry.get().strip()
-    if not url:
-        messagebox.showerror("Missing URL", "Please enter a valid media URL.")
+    # Gather URLs from the Text widget. Split on newlines and commas.
+    raw_text = url_text.get("1.0", tk.END)
+    # Split on comma and newline, then strip whitespace
+    candidates = [part.strip() for line in raw_text.strip().splitlines() for part in line.split(",")]
+    # Filter out empty strings
+    urls = [u for u in candidates if u]
+
+    if not urls:
+        messagebox.showerror("Missing URL", "Please enter at least one valid media URL.")
         return
 
-    # Build the command: run_all orchestrates parsing, downloading and tagging.
-    # Omit the --type flag so run_all can infer the correct parser from the URL.
-    cmd = ["python3", "run_all.py", "--url", url]
+    # Build the command: supply --url once followed by all URLs. run_all.py
+    # accepts multiple URLs via nargs='+' and will process them in order.
+    cmd = ["python3", "run_all.py", "--url"] + urls
 
     print(f"[DEBUG] Running command: {' '.join(cmd)}")
 
@@ -41,9 +48,9 @@ main_frame = ttk.Frame(root, padding=20)
 main_frame.pack(fill="both", expand=True)
 
 # === Widgets ===
-ttk.Label(main_frame, text="Media URL:").grid(row=0, column=0, sticky="w")
-url_entry = ttk.Entry(main_frame, width=50)
-url_entry.grid(row=0, column=1, columnspan=3, padx=10, pady=5)
+ttk.Label(main_frame, text="Media URL(s):").grid(row=0, column=0, sticky="nw")
+url_text = tk.Text(main_frame, width=50, height=4)
+url_text.grid(row=0, column=1, columnspan=3, padx=10, pady=5, sticky="we")
 
 # Previously a drop‑down allowed users to choose the parser type. Since the
 # system can now infer the correct parser from the URL, the drop‑down has

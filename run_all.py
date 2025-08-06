@@ -12,6 +12,9 @@ from version import VERSION, get_git_revision
 
 # === CLI args ===
 parser = argparse.ArgumentParser(description="Cascade music downloader scripts.")
+# Accept one or more URLs. When multiple URLs are provided, the type can be
+# inferred individually for each link. If --url is omitted, argparse will
+# produce None and we handle that in main().
 parser.add_argument("--url", nargs="+", help="One or more album/song URLs")
 # Allow --type to be optional. If omitted, run_all will auto-detect the correct parser
 parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"],
@@ -130,6 +133,13 @@ def run_step(step_num, description, script_name, extra_args=None, csv_path=None)
     return True
 
 def main():
+    """Main entry point for the run_all orchestrator.
+
+    Handles one or more URLs by determining the appropriate parser for each
+    link (unless a global --type is specified) and executing the parse,
+    download and tag steps sequentially. Logs version information once at
+    the start of the run.
+    """
     if not args.url:
         write_log("[🛑 ERROR] You must pass at least one URL via --url")
         sys.exit(1)
@@ -144,20 +154,19 @@ def main():
         "apple": "apple_parser.py"
     }
 
-    # If --type was not provided, infer it from the first URL
-    parser_type = args.type
-    if parser_type is None:
-        parser_type = detect_type(args.url[0])
-        write_log(f"[INFO] Auto‑detected type '{parser_type}' for URL: {args.url[0]}")
-
-    parser_script = parser_script_map.get(parser_type)
-    if not parser_script:
-        write_log(f"[🛑 ERROR] Unknown type: {parser_type}")
-        sys.exit(1)
-
     all_csv_paths = []
 
     for url in args.url:
+        # Determine the parser type for this URL
+        parser_type_for_url = args.type or detect_type(url)
+        if not args.type:
+            write_log(f"[INFO] Auto‑detected type '{parser_type_for_url}' for URL: {url}")
+
+        parser_script = parser_script_map.get(parser_type_for_url)
+        if not parser_script:
+            write_log(f"[🛑 ERROR] Unknown type: {parser_type_for_url}")
+            continue
+
         write_log(f"\n🔗 Processing URL: {url}")
         csv_path = None
         pre_parse_time = datetime.now().timestamp()
@@ -200,7 +209,7 @@ def main():
     if args.test_mode and not args.no_cleanup:
         remove_tmp_dir()
 
-write_log(f"[⚙️ MODE] Running in {'TEST-MODE' if args.test_mode else 'real'} mode.")
+    write_log(f"[⚙️ MODE] Running in {'TEST-MODE' if args.test_mode else 'real'} mode.")
 
 if __name__ == "__main__":
     main()
