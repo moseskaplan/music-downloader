@@ -7,6 +7,9 @@ from pathlib import Path
 import pandas as pd
 import shutil
 
+# Version information
+from version import VERSION, get_git_revision
+
 # === CLI args ===
 parser = argparse.ArgumentParser(description="Cascade music downloader scripts.")
 parser.add_argument("--url", nargs="+", help="One or more album/song URLs")
@@ -130,6 +133,9 @@ def main():
     if not args.url:
         write_log("[🛑 ERROR] You must pass at least one URL via --url")
         sys.exit(1)
+
+    # Log version information once at the start of the run
+    write_log(f"[INFO] Music Downloader version {VERSION} ({get_git_revision()})")
 
     parser_script_map = {
         "wiki": "wiki_parser.py",

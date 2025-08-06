@@ -5,53 +5,16 @@ import argparse
 import os
 import re
 import pandas as pd
-from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 
-def clean_youtube_url(original_url: str) -> str:
-    """Extract a clean watch?v=VIDEO_ID format from the given YouTube URL."""
-    parsed = urlparse(original_url)
-    query = parse_qs(parsed.query)
-    video_id = query.get("v", [None])[0]
-    if video_id:
-        return f"https://www.youtube.com/watch?v={video_id}"
-    return original_url  # fallback
+# Import shared helpers from utils
+from utils import clean_youtube_url, clean_track_title
+
+# clean_youtube_url is now provided by utils
 
 # --- Title formatting helpers ---
 
-def _clean_track_title(title: str) -> str:
-    """Normalize track titles by removing boilerplate and formatting featured artists.
-
-    This helper removes phrases like "Official Video" or "Official Audio" and
-    reformats patterns such as "feat X" into "(feat. X)". It also collapses
-    extra whitespace and trims stray hyphens.
-
-    Args:
-        title: Raw title string from YouTube metadata
-
-    Returns:
-        Cleaned track title
-    """
-    if not title:
-        return title
-    original = title
-    # Remove common boilerplate terms (case-insensitive)
-    title = re.sub(r"\bOfficial\s+Video\b", "", title, flags=re.IGNORECASE)
-    title = re.sub(r"\bOfficial\s+Audio\b", "", title, flags=re.IGNORECASE)
-    title = re.sub(r"\bLyrics?\b", "", title, flags=re.IGNORECASE)
-    # Normalize 'feat' or 'featuring' into parentheses
-    # Capture the featured artist(s)
-    feat_match = re.search(r"feat\.?\s+([^()\-]+)", title, flags=re.IGNORECASE)
-    if feat_match:
-        featured = feat_match.group(1).strip()
-        # Remove the feat segment from the original title
-        title = re.sub(r"feat\.?\s+" + re.escape(featured), "", title, flags=re.IGNORECASE).strip()
-        # Append formatted feature string
-        title = f"{title.strip()} (feat. {featured})"
-    # Collapse multiple spaces and strip stray punctuation
-    title = " ".join(title.split())
-    title = title.strip("- ")
-    return title
+# clean_track_title is now provided by utils
 
 def extract_track_data(youtube_url: str, base_music_dir: str, test_mode: bool = False) -> pd.DataFrame:
     youtube_url = clean_youtube_url(youtube_url)
@@ -75,33 +38,43 @@ def extract_track_data(youtube_url: str, base_music_dir: str, test_mode: bool = 
     # If no explicit track, derive from the raw title using common separators.
     if not track_title or track_title.strip() == '':
         candidate = title_raw.strip()
-        # Try splitting on ' - ', a common separator between artist and title
+        # First try splitting on ' - ', which often separates artist and title. If exactly
+        # two parts result, assume "Artist - Title" ordering. For more segments,
+        # fall back to treating the last part as artist and the second last as title.
         if ' - ' in candidate:
             parts = [p.strip() for p in candidate.split(' - ') if p.strip()]
-            if len(parts) >= 2:
+            if len(parts) == 2:
+                candidate_artist, candidate_title = parts
+                uploader = (info.get('uploader') or '').lower()
+                # Only update artist if we don't already have a specific artist
+                if artist.lower() in ['unknown artist', uploader, candidate_artist.lower()]:
+                    artist = candidate_artist
+                track_title = candidate_title
+            elif len(parts) >= 2:
+                # Use the last two parts as title/artist in reverse order
                 possible_title = parts[-2]
                 possible_artist = parts[-1]
-                # Update artist only if current artist is generic or matches uploader
-                uploader = info.get('uploader') or ''
-                if artist.lower() in ['unknown artist', uploader.lower(), possible_artist.lower()]:
+                uploader = (info.get('uploader') or '').lower()
+                if artist.lower() in ['unknown artist', uploader, possible_artist.lower()]:
                     artist = possible_artist
                 track_title = possible_title
-        # Try splitting on '|' as an alternative delimiter
         elif '|' in candidate:
+            # Split on '|' which sometimes separates title and artist
             parts = [p.strip() for p in candidate.split('|') if p.strip()]
             if len(parts) >= 2:
-                possible_title = parts[1]
-                possible_artist = parts[-1]
-                uploader = info.get('uploader') or ''
-                if artist.lower() in ['unknown artist', uploader.lower(), possible_artist.lower()]:
-                    artist = possible_artist
-                track_title = possible_title
-        # Fallback to the full title if still unresolved
+                # Assume the second part is the title and the last part is the artist
+                candidate_title = parts[1]
+                candidate_artist = parts[-1]
+                uploader = (info.get('uploader') or '').lower()
+                if artist.lower() in ['unknown artist', uploader, candidate_artist.lower()]:
+                    artist = candidate_artist
+                track_title = candidate_title
+        # Fallback to using the entire candidate string as the title
         if not track_title or track_title.strip() == '':
             track_title = candidate
 
     # Clean the derived track title by removing boilerplate and normalizing "feat" patterns
-    track_title = _clean_track_title(track_title)
+    track_title = clean_track_title(track_title)
 
     # Compute human-readable duration
     duration = info.get('duration')

@@ -3,28 +3,12 @@ import argparse
 import pandas as pd
 from youtubesearchpython import VideosSearch
 import yt_dlp
-from datetime import timedelta
 from pathlib import Path
 
-
-def parse_duration_str(duration_str):
-    try:
-        minutes, seconds = map(int, duration_str.strip().split(":"))
-        return timedelta(minutes=minutes, seconds=seconds).total_seconds()
-    except:
-        return None
+# Import shared helpers from utils
+from utils import parse_duration_str, clean_filename
 
 
-def clean_filename(text: str) -> str:
-    """Sanitize a filename by allowing common punctuation.
-
-    This function preserves alphanumeric characters, spaces, hyphens, underscores,
-    parentheses and periods. It strips trailing/leading whitespace to produce
-    a filesystem-safe name. If additional characters need to be allowed later
-    (e.g. apostrophes), they can be added to the allowed set.
-    """
-    allowed = set(" -_().")
-    return "".join(c for c in text if c.isalnum() or c in allowed).strip()
 
 
 def download_album_tracks(csv_path, base_music_dir: Path, test_mode=False):
