@@ -38,28 +38,38 @@ def extract_track_data(youtube_url: str, base_music_dir: str, test_mode: bool = 
     # If no explicit track, derive from the raw title using common separators.
     if not track_title or track_title.strip() == '':
         candidate = title_raw.strip()
-        # Try splitting on ' - ', a common separator between artist and title
+        # First try splitting on ' - ', which often separates artist and title. If exactly
+        # two parts result, assume "Artist - Title" ordering. For more segments,
+        # fall back to treating the last part as artist and the second last as title.
         if ' - ' in candidate:
             parts = [p.strip() for p in candidate.split(' - ') if p.strip()]
-            if len(parts) >= 2:
+            if len(parts) == 2:
+                candidate_artist, candidate_title = parts
+                uploader = (info.get('uploader') or '').lower()
+                # Only update artist if we don't already have a specific artist
+                if artist.lower() in ['unknown artist', uploader, candidate_artist.lower()]:
+                    artist = candidate_artist
+                track_title = candidate_title
+            elif len(parts) >= 2:
+                # Use the last two parts as title/artist in reverse order
                 possible_title = parts[-2]
                 possible_artist = parts[-1]
-                # Update artist only if current artist is generic or matches uploader
-                uploader = info.get('uploader') or ''
-                if artist.lower() in ['unknown artist', uploader.lower(), possible_artist.lower()]:
+                uploader = (info.get('uploader') or '').lower()
+                if artist.lower() in ['unknown artist', uploader, possible_artist.lower()]:
                     artist = possible_artist
                 track_title = possible_title
-        # Try splitting on '|' as an alternative delimiter
         elif '|' in candidate:
+            # Split on '|' which sometimes separates title and artist
             parts = [p.strip() for p in candidate.split('|') if p.strip()]
             if len(parts) >= 2:
-                possible_title = parts[1]
-                possible_artist = parts[-1]
-                uploader = info.get('uploader') or ''
-                if artist.lower() in ['unknown artist', uploader.lower(), possible_artist.lower()]:
-                    artist = possible_artist
-                track_title = possible_title
-        # Fallback to the full title if still unresolved
+                # Assume the second part is the title and the last part is the artist
+                candidate_title = parts[1]
+                candidate_artist = parts[-1]
+                uploader = (info.get('uploader') or '').lower()
+                if artist.lower() in ['unknown artist', uploader, candidate_artist.lower()]:
+                    artist = candidate_artist
+                track_title = candidate_title
+        # Fallback to using the entire candidate string as the title
         if not track_title or track_title.strip() == '':
             track_title = candidate
 
