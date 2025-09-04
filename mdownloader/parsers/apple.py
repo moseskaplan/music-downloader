@@ -1,11 +1,11 @@
 """Apple Music album parser with multi‑disc support.
 
 This module queries the iTunes Search API to fetch track information for
-an Apple Music album.  It extracts the album and artist names and
+an Apple Music album.  It extracts the album and artist names and
 constructs a list of tracks sorted by disc and track numbers.  The
 resulting data is written to a CSV file in the user's music folder
-(``~/Music Downloader`` by default) or in a temporary test directory
-when ``--test-mode`` is specified.
+(`~/Music Downloader` by default) or in a temporary test directory
+when `--test-mode` is specified.
 
 Usage as a script:
     python3 -m mdownloader.parsers.apple --url <album_url> [--test-mode]
@@ -27,7 +27,7 @@ from mdownloader.core.utils import seconds_to_mmss, get_tmp_dir
 
 
 def clean_apple_url(original_url: str) -> str:
-    """Strip query parameters and fragments from an Apple Music URL.
+    """Strip query parameters and fragments from an Apple Music URL.
 
     Args:
         original_url: The full album URL provided by the user.
@@ -40,9 +40,27 @@ def clean_apple_url(original_url: str) -> str:
 
 
 def extract_album_id(url: str) -> str | None:
-    """Extract the numeric album identifier from an Apple Music URL."""
-    match = re.search(r'/album/.*?/(\d+)', url)
-    return match.group(1) if match else None
+    """Extract the numeric album identifier from an Apple Music URL.
+
+    This helper attempts to robustly locate the numeric album ID in
+    various Apple Music album URL formats.  It strips away any query
+    parameters or fragments, then examines the path segments from right
+    to left and returns the first purely numeric segment it finds.  If
+    none are found, ``None`` is returned.
+
+    Args:
+        url: The (possibly uncleaned) Apple Music album URL.
+
+    Returns:
+        The numeric album identifier as a string, or ``None`` if the
+        URL does not contain a numeric ID.
+    """
+    parsed = urlparse(url)
+    segments = parsed.path.strip('/').split('/')
+    for seg in reversed(segments):
+        if seg.isdigit():
+            return seg
+    return None
 
 
 def extract_album_info(url: str) -> tuple[str, str, list[dict]]:
@@ -53,7 +71,7 @@ def extract_album_info(url: str) -> tuple[str, str, list[dict]]:
     number and assigns sequential ``track_number`` values across discs.
 
     Args:
-        url: A cleaned Apple Music album URL.
+        url: A cleaned Apple Music album URL.
 
     Returns:
         A tuple ``(album_name, artist_name, tracks)`` where ``tracks`` is
