@@ -64,3 +64,6 @@ ttk.Button(main_frame, text="Run Downloader", command=run_downloader).grid(row=2
 
 # Launch window
 root.mainloop()
+
+if __name__ == "__main__":
+    root.mainloop()
