@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from datetime import timedelta
 
+
 def get_tmp_dir(test_mode: bool) -> Path:
     """Return the appropriate temporary directory path.
 

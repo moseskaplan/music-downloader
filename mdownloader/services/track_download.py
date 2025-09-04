@@ -6,9 +6,7 @@ import yt_dlp
 from pathlib import Path
 
 # Import shared helpers from utils
-from utils import parse_duration_str, clean_filename
-
-
+from mdownloader.core.utils import parse_duration_str, clean_filename
 
 
 def download_album_tracks(csv_path, base_music_dir: Path, test_mode=False):
@@ -97,10 +95,11 @@ if __name__ == "__main__":
     parser.add_argument("--test-mode", action="store_true", help="Preview actions without downloading files")
     args = parser.parse_args()
 
-    if args.test_mode:
-        base_music_dir = Path("/tmp/music_downloader_test")
-    else:
-        base_music_dir = Path(os.path.expanduser("~/Music Downloader"))
+if args.test_mode:
+    base_music_dir = Path("/tmp/music_downloader_test")
+else:
+    # Use a cross‑platform home‑based directory for downloads
+    base_music_dir = Path.home() / "Music Downloader"
 
     if not os.path.exists(args.csv_path):
         print(f"[!] File not found: {args.csv_path}")

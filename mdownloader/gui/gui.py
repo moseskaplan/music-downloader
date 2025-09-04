@@ -25,15 +25,18 @@ def run_downloader():
 
     # Build the command: supply --url once followed by all URLs. run_all.py
     # accepts multiple URLs via nargs='+' and will process them in order.
-    cmd = ["python3", "run_all.py", "--url"] + urls
+    cmd = ["python3", "-m", "mdownloader.core.run_all", "--url"] + urls
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.getcwd()
 
     print(f"[DEBUG] Running command: {' '.join(cmd)}")
 
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, env=env)
         messagebox.showinfo("Success", "Download completed successfully.")
     except subprocess.CalledProcessError as e:
         messagebox.showerror("Error", f"Download failed:\n{e}")
+
 
 # === Setup GUI ===
 root = tk.Tk()
@@ -61,3 +64,6 @@ ttk.Button(main_frame, text="Run Downloader", command=run_downloader).grid(row=2
 
 # Launch window
 root.mainloop()
+
+if __name__ == "__main__":
+    root.mainloop()

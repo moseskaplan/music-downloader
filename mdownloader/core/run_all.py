@@ -1,3 +1,18 @@
+"""Orchestrate the music downloader pipeline.
+
+This script coordinates the parsing, downloading and tagging steps for one or
+more provided media URLs. It handles automatic parser selection based on the
+URL domain, supports test mode output to a temporary directory, logs each
+operation, and writes a run log into each album folder for easy
+troubleshooting.
+
+Usage:
+    python3 -m mdownloader.core.run_all --url <url1> [<url2> ...]
+
+The --type flag may be used to force a specific parser (wiki, youtube,
+search, apple). When omitted, the parser is inferred from each URL.
+"""
+
 import subprocess
 import argparse
 import sys
@@ -7,45 +22,52 @@ from pathlib import Path
 import pandas as pd
 import shutil
 
-# Version information
-from version import VERSION, get_git_revision
+from mdownloader.version import VERSION, get_git_revision
+
 
 # === CLI args ===
 parser = argparse.ArgumentParser(description="Cascade music downloader scripts.")
-# Accept one or more URLs. When multiple URLs are provided, the type can be
-# inferred individually for each link. If --url is omitted, argparse will
-# produce None and we handle that in main().
 parser.add_argument("--url", nargs="+", help="One or more album/song URLs")
 # Allow --type to be optional. If omitted, run_all will auto-detect the correct parser
 parser.add_argument("--type", choices=["wiki", "youtube", "search", "apple"],
                     help="Source type (wiki, youtube, search, apple). If omitted, the type will be inferred from the URL.")
 parser.add_argument("--skip-parse", action="store_true", help="Skip parser step")
-parser.add_argument("--skip-download", action="store_true", help="Skip track_download.py")
-parser.add_argument("--skip-tag", action="store_true", help="Skip track_metadata_cleanup.py")
+parser.add_argument("--skip-download", action="store_true", help="Skip track download step")
+parser.add_argument("--skip-tag", action="store_true", help="Skip metadata tagging step")
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
-parser.add_argument("--test-mode", action="store_true", help="Enable test mode (always cleans up temp data at end)")
+parser.add_argument("--test-mode", action="store_true", help="Enable test mode (writes to tmp directory)")
 parser.add_argument("--no-cleanup", action="store_true", help="Skip cleanup of temp folder in test mode (for debugging)")
 args = parser.parse_args()
 
 # === CONFIG ===
-base_dir = os.path.expanduser("~/Music Downloader")
-log_dir = os.path.join(base_dir, "0 Run Logs")
+# Base directory where downloaded music is saved
+base_dir = Path.home() / "Music Downloader"
+# Central log directory for developers: use Library/Application Support on macOS
+# and fall back to the music folder on other platforms.
+app_support_base = Path.home() / "Library/Application Support/Music Downloader"
+log_dir = app_support_base / "Logs"
 os.makedirs(log_dir, exist_ok=True)
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_path = os.path.join(log_dir, f"run_log_{timestamp}.txt")
+log_path = str(log_dir / f"run_log_{timestamp}.txt")
 
 # === Temp dir helper ===
-def get_tmp_dir():
+def get_tmp_dir() -> Path:
     """Return correct temporary directory based on mode."""
     return Path("/tmp/music_downloader_test") if args.test_mode else Path("/tmp/music_downloader_dryrun")
 
+# === Logging ===
+current_run_lines: list[str] = []
+
 def write_log(message):
+    """Write a message to the central log and accumulate it for the current run."""
     if message is None:
         return
     with open(log_path, "a") as f:
         f.write(str(message) + "\n")
     print(message, flush=True)
+    # accumulate per-run messages
+    current_run_lines.append(str(message))
 
 def clear_tmp_dir():
     tmp_dir = get_tmp_dir()
@@ -64,50 +86,45 @@ def remove_tmp_dir():
 if args.test_mode:
     clear_tmp_dir()
 
-def run_script(script_name, *extra_args, required=True):
-    """Helper to run a script and log the result."""
-    cmd = ["python3", script_name] + list(extra_args)
+def run_script(module_name: str, *extra_args, required: bool = True) -> bool:
+    """Helper to run a module via `python3 -m` and log the result."""
+    cmd = ["python3", "-m", module_name] + list(extra_args)
     if args.test_mode:
-        cmd.append("--test-mode")  # Pass down to all steps
+        # Pass test-mode flag down to all steps
+        cmd.append("--test-mode")
     write_log(f"[{datetime.now()}] ⏳ Running: {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=required)
-        write_log(result.stdout)
+        result = subprocess.run(cmd, text=True)
+        # Write stdout and stderr to log
+        if result.stdout:
+            write_log(result.stdout)
         if result.stderr:
             write_log(f"[stderr] {result.stderr}")
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
-        write_log(f"[❌ ERROR] {script_name} failed with exit code {e.returncode}")
+        write_log(f"[❌ ERROR] {module_name} failed with exit code {e.returncode}")
         write_log(e.stderr or "No stderr output")
         if required:
             sys.exit(e.returncode)
         return False
 
-def find_latest_csv(after_timestamp):
+def find_latest_csv(after_timestamp: float) -> str | None:
     """Find the most recently modified CSV after a given timestamp."""
-    search_dir = get_tmp_dir() if args.test_mode else Path(base_dir)
+    search_dir = get_tmp_dir() if args.test_mode else base_dir
     latest_csv = None
     latest_time = after_timestamp
-
     if not search_dir.exists():
         return None
-
     for folder in search_dir.glob("*_*"):
         for csv_file in folder.glob("*.csv"):
             mod_time = csv_file.stat().st_mtime
             if mod_time > latest_time:
                 latest_time = mod_time
                 latest_csv = csv_file
-
     return str(latest_csv) if latest_csv else None
 
 def detect_type(url: str) -> str:
-    """Infer the parser type from the given URL.
-
-    Returns one of "wiki", "youtube", "apple", or "search". The function
-    examines the domain to make a best guess. If none match, it falls back
-    to "search".
-    """
+    """Infer the parser type from the given URL."""
     lower = url.lower()
     if "wikipedia.org" in lower:
         return "wiki"
@@ -117,54 +134,49 @@ def detect_type(url: str) -> str:
         return "apple"
     return "search"
 
-def run_step(step_num, description, script_name, extra_args=None, csv_path=None):
-    """Run a single pipeline step and always stop on failure."""
+def run_step(step_num: int, description: str, module_name: str, extra_args: list[str] | None = None, csv_path: str | None = None) -> bool:
+    """Run a single pipeline step and stop on failure."""
     write_log(f"\n=== STEP {step_num}: {description} ===")
-    args_list = extra_args or []
+    args_list = extra_args.copy() if extra_args else []
     if csv_path:
         args_list.insert(0, csv_path)
-
-    success = run_script(script_name, *args_list)
+    success = run_script(module_name, *args_list)
     if not success:
         write_log(f"[🛑 STOPPED] {description} failed.")
         return False
-
     write_log(f"[✅] {description} succeeded.\n")
     return True
 
 def main():
-    """Main entry point for the run_all orchestrator.
-
-    Handles one or more URLs by determining the appropriate parser for each
-    link (unless a global --type is specified) and executing the parse,
-    download and tag steps sequentially. Logs version information once at
-    the start of the run.
-    """
     if not args.url:
         write_log("[🛑 ERROR] You must pass at least one URL via --url")
         sys.exit(1)
-
     # Log version information once at the start of the run
     write_log(f"[INFO] Music Downloader version {VERSION} ({get_git_revision()})")
 
-    parser_script_map = {
-        "wiki": "wiki_parser.py",
-        "youtube": "youtube_parser.py",
-        "search": "search_parser.py",
-        "apple": "apple_parser.py"
+    # Map parser types to their module names (to be run via -m)
+    parser_module_map = {
+        "wiki": "mdownloader.parsers.wiki",
+        "youtube": "mdownloader.parsers.youtube",
+        "search": "mdownloader.parsers.search",
+        "apple": "mdownloader.parsers.apple",
     }
 
-    all_csv_paths = []
+    all_csv_paths: list[str | None] = []
 
     for url in args.url:
-        # Determine the parser type for this URL
-        parser_type_for_url = args.type or detect_type(url)
-        if not args.type:
-            write_log(f"[INFO] Auto‑detected type '{parser_type_for_url}' for URL: {url}")
+        # Reset per-run log accumulator
+        global current_run_lines
+        current_run_lines = []
 
-        parser_script = parser_script_map.get(parser_type_for_url)
-        if not parser_script:
-            write_log(f"[🛑 ERROR] Unknown type: {parser_type_for_url}")
+        # Determine parser type for this URL
+        parser_type = args.type or detect_type(url)
+        if not args.type:
+            write_log(f"[INFO] Auto‑detected type '{parser_type}' for URL: {url}")
+
+        module_name = parser_module_map.get(parser_type)
+        if not module_name:
+            write_log(f"[🛑 ERROR] Unknown type: {parser_type}")
             continue
 
         write_log(f"\n🔗 Processing URL: {url}")
@@ -173,7 +185,7 @@ def main():
 
         # === STEP 1: Parse ===
         if not args.skip_parse:
-            if not run_step(1, "Parsing", parser_script, ["--url", url]):
+            if not run_step(1, "Parsing", module_name, ["--url", url]):
                 continue
             csv_path = find_latest_csv(pre_parse_time)
             if not csv_path:
@@ -182,14 +194,24 @@ def main():
 
         # === STEP 2: Download ===
         if not args.skip_download:
-            if not run_step(2, "Downloading", "track_download.py", [csv_path]):
+            if not run_step(2, "Downloading", "mdownloader.services.track_download", [csv_path]):
                 continue
 
         # === STEP 3: Tag ===
         if not args.skip_tag:
-            if not run_step(3, "Tagging", "track_metadata_cleanup.py", [csv_path]):
+            if not run_step(3, "Tagging", "mdownloader.services.track_metadata_cleanup", [csv_path]):
                 continue
 
+        # Save run log to album folder
+        if csv_path:
+            try:
+                album_folder = Path(csv_path).parent
+                run_log_file = album_folder / "run_log.txt"
+                with open(run_log_file, "w") as log_f:
+                    log_f.write("\n".join(current_run_lines))
+                write_log(f"[✓] Saved run log to: {run_log_file}")
+            except Exception as ex:
+                write_log(f"[!] Failed to save run log for {url}: {ex}")
         all_csv_paths.append(csv_path)
 
     # === SUMMARY ===

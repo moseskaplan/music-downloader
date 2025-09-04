@@ -1,30 +1,57 @@
-# wiki_parser.py
+"""Wikipedia album parser for the music downloader.
 
+This module scrapes track lists from Wikipedia album pages.  It
+attempts to find a table containing song titles and durations and
+returns a structured DataFrame.  The output CSV is written to a
+folder in the user's music directory (``~/Music Downloader``) or to a
+temporary directory when running in test mode.
+
+Usage as a script:
+    python3 -m mdownloader.parsers.wiki --url <wikipedia_url> [--artist <name>] [--test-mode]
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+from pathlib import Path
+from urllib.parse import urlparse, urlunparse
+
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
-import re
-import os
-import argparse
-from urllib.parse import urlparse, urlunparse
-from pathlib import Path
+
+from mdownloader.core.utils import get_tmp_dir
+
 
 def clean_wiki_url(original_url: str) -> str:
+    """Remove query parameters and fragments from a Wikipedia URL."""
     parsed = urlparse(original_url)
-    cleaned_url = urlunparse((
-        parsed.scheme,
-        parsed.netloc,
-        parsed.path,
-        '',
-        '',
-        ''
-    ))
-    return cleaned_url
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
+
 
 def clean_album_title(raw_title: str) -> str:
+    """Strip parenthetical descriptors from an album title."""
     return re.sub(r'\s*\(.*?\)\s*', '', raw_title).strip()
 
-def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: bool = False, artist_name: str = None) -> pd.DataFrame:
+
+def extract_album_data_wiki(wikipedia_url: str, test_mode: bool = False, artist_name: str | None = None) -> pd.DataFrame:
+    """Scrape a Wikipedia album page and build a DataFrame of tracks.
+
+    Args:
+        wikipedia_url: The URL of the album's Wikipedia page.
+        test_mode: If True, write output to a temporary directory.
+        artist_name: Optional artist name override; if omitted the
+            function attempts to extract it from the page infobox.
+
+    Returns:
+        A pandas DataFrame containing track metadata.
+
+    Raises:
+        Exception: If no suitable track list table can be located or
+            artist name cannot be determined.
+    """
     wikipedia_url = clean_wiki_url(wikipedia_url)
     print(f"[DEBUG] Cleaned Wikipedia URL: {wikipedia_url}")
     response = requests.get(wikipedia_url)
@@ -44,10 +71,10 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
     if not candidate_tables:
         print("[ERROR] No obvious tracklist table found.")
         raise Exception("No obvious tracklist table found and cannot prompt for input in GUI mode.")
-    else:
-        table_idx, tracklist_table, headers = candidate_tables[0]
-        print(f"\nUsing Table {table_idx} as the tracklist table.")
+    table_idx, tracklist_table, headers = candidate_tables[0]
+    print(f"\nUsing Table {table_idx} as the tracklist table.")
 
+    # Handle nested tables within the tracklist
     nested_table = tracklist_table.find('table')
     if nested_table:
         print("[INFO] Nested table detected. Using nested tracklist.")
@@ -55,6 +82,7 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
     else:
         track_rows = tracklist_table.find_all('tr')[1:]
 
+    # Extract album and artist information
     album_title_raw = soup.find('h1').text.strip()
     album_title = clean_album_title(album_title_raw)
 
@@ -72,6 +100,7 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
             raise Exception("Could not auto-detect artist and cannot prompt for input in GUI mode.")
 
     album_year = None
+    infobox = soup.find('table', class_='infobox')
     if infobox:
         for row in infobox.find_all('tr'):
             if 'Released' in row.text:
@@ -80,24 +109,21 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
                     album_year = match.group()
                     break
 
-    data = []
+    data: list[dict] = []
     for row in track_rows:
         th = row.find('th')
         tds = row.find_all('td')
         if not th or len(tds) < 2:
             continue
-
         try:
             track_number = int(re.sub(r'\D', '', th.get_text(strip=True)))
         except ValueError:
             continue
-
         track_title = tds[0].get_text(separator=' ', strip=True)
         track_title = re.sub(r'\(.*?\)', '', track_title).strip('"“” ')
         raw_length = tds[-1].get_text(strip=True)
         duration_match = re.search(r'\d+:\d{2}', raw_length)
         track_duration = duration_match.group() if duration_match else None
-
         print(f"[DEBUG] {track_number}. {track_title} — {track_duration}")
         data.append({
             'track_number': track_number,
@@ -108,20 +134,21 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
             'track_duration': track_duration,
             'wikipedia_album_url': wikipedia_url,
             'preferred_clip_url': None,
-            'downloaded_locally': False
+            'downloaded_locally': False,
         })
 
     df = pd.DataFrame(data)
 
+    # Construct safe folder and file names
     safe_album = album_title.replace('/', '-').replace(' ', '_')
     safe_artist = artist_name.replace('/', '-').replace(' ', '_')
     album_folder_name = f"{safe_artist}_{safe_album}"
 
     if test_mode:
-        album_folder_path = Path("/tmp/music_downloader_test") / album_folder_name
+        album_folder_path = get_tmp_dir(True) / album_folder_name
         print(f"[TEST-MODE] Using temporary output path: {album_folder_path}")
     else:
-        album_folder_path = Path(base_music_dir) / album_folder_name
+        album_folder_path = Path.home() / "Music Downloader" / album_folder_name
         print(f"[✓] Output directory: {album_folder_path}")
 
     os.makedirs(album_folder_path, exist_ok=True)
@@ -137,21 +164,24 @@ def extract_album_data_wiki(wikipedia_url: str, base_music_dir: str, test_mode: 
 
     return df
 
-if __name__ == "__main__":
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Wikipedia album parser")
-    parser.add_argument('--url', type=str, required=True, help='Wikipedia album URL')
-    parser.add_argument('--artist', type=str, help='Artist name (optional)')
-    parser.add_argument('--test-mode', action='store_true', help='Enable test mode output to /tmp/music_downloader_test')
+    parser.add_argument("--url", type=str, required=True, help="Wikipedia album URL")
+    parser.add_argument("--artist", type=str, help="Artist name (optional)")
+    parser.add_argument("--test-mode", action="store_true", help="Enable test mode output to temp directory")
     args = parser.parse_args()
 
-    base_music_dir = os.path.expanduser("~/Music Downloader")
-
-    df = extract_album_data_wiki(
-        args.url,
-        base_music_dir,
-        test_mode=args.test_mode,
-        artist_name=args.artist
-    )
+    try:
+        df = extract_album_data_wiki(args.url, test_mode=args.test_mode, artist_name=args.artist)
+    except Exception as exc:
+        print(f"[❌ ERROR] {exc}")
+        sys.exit(1)
 
     print("\nExtracted Album Data:\n")
     print(df)
+
+
+if __name__ == "__main__":
+    import sys
+    main()
