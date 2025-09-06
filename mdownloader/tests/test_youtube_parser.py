@@ -1,19 +1,30 @@
 import subprocess
+import os
 from pathlib import Path
 import shutil
 
 def test_youtube_parser_test_mode():
     """Test YouTube single-track parser in test-mode with cleanup skipped."""
     url = "https://www.youtube.com/watch?v=3JZ_D3ELwOQ"  # Example track
+    # Use the package orchestrator; type will be inferred automatically.
     cmd = [
-        "python3", "run_all.py",
-        "--type", "youtube",
+        "python3", "-m", "mdownloader.core.run_all",
         "--url", url,
         "--summary",
         "--test-mode",
-        "--no-cleanup"  # keep temp folder for verification
+        "--no-cleanup"
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    env = os.environ.copy()
+    current = Path(__file__).resolve()
+    root_dir = None
+    for parent in current.parents:
+        if (parent / "mdownloader").exists():
+            root_dir = parent
+            break
+    if root_dir is None:
+        root_dir = Path(os.getcwd()).parent
+    env["PYTHONPATH"] = str(root_dir)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
     # Ensure it ran successfully
     assert result.returncode == 0, f"Process failed: {result.stderr}"
