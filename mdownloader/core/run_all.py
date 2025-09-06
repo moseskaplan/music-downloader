@@ -37,6 +37,7 @@ parser.add_argument("--skip-tag", action="store_true", help="Skip metadata taggi
 parser.add_argument("--summary", action="store_true", help="Print summary after all steps.")
 parser.add_argument("--test-mode", action="store_true", help="Enable test mode (writes to tmp directory)")
 parser.add_argument("--no-cleanup", action="store_true", help="Skip cleanup of temp folder in test mode (for debugging)")
+parser.add_argument("--workers", type=int, help="Number of concurrent downloads to use in the download step")
 args = parser.parse_args()
 
 # === CONFIG ===
@@ -94,7 +95,7 @@ def run_script(module_name: str, *extra_args, required: bool = True) -> bool:
         cmd.append("--test-mode")
     write_log(f"[{datetime.now()}] ⏳ Running: {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=required)
         # Write stdout and stderr to log
         if result.stdout:
             write_log(result.stdout)
@@ -194,7 +195,11 @@ def main():
 
         # === STEP 2: Download ===
         if not args.skip_download:
-            if not run_step(2, "Downloading", "mdownloader.services.track_download", [csv_path]):
+            # Build extra args for track download. Include workers if specified
+            dl_args = [csv_path]
+            if args.workers:
+                dl_args += ["--workers", str(args.workers)]
+            if not run_step(2, "Downloading", "mdownloader.services.track_download", dl_args):
                 continue
 
         # === STEP 3: Tag ===
