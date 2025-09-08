@@ -70,6 +70,15 @@ def write_log(message):
     # accumulate per-run messages
     current_run_lines.append(str(message))
 
+# === API key check ===
+if not args.skip_download:
+    api_key = os.getenv("YOUTUBE_API_KEY")
+    if not api_key:
+        write_log("[🛑 ERROR] YOUTUBE_API_KEY environment variable not set. "
+                  "Please export it in your shell config or pass --api-key to track_download.")
+        sys.exit(1)
+
+
 def clear_tmp_dir():
     tmp_dir = get_tmp_dir()
     if tmp_dir.exists():
