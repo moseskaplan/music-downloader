@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.9", "3.10", "3.11" ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system deps (optional; Tk not required since we skip GUI on CI)
+        run: sudo apt-get update
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: flake8 mdownloader
+
+      - name: Run tests
+        env:
+          # Provide a dummy API key to satisfy any early checks in dry-run
+          YOUTUBE_API_KEY: "DUMMY_FOR_CI"
+        run: pytest -v --maxfail=3 --disable-warnings

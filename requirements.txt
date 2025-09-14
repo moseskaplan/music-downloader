@@ -1,0 +1,16 @@
+# Core parsing/downloading/tagging
+yt-dlp>=2024.5.27
+mutagen>=1.47.0
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=5.2.1
+rapidfuzz>=3.8.1
+
+# If you're using the official YouTube Data API client (safe even if you do raw HTTP)
+google-api-python-client>=2.131.0
+google-auth>=2.29.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# Nice-to-have for cross-platform app dirs (optional; remove if unused)
+platformdirs>=4.2.0
