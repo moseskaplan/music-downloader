@@ -1,13 +1,9 @@
-"""Apple Music album parser with multi‑disc support.
+"""Apple Music album parser with multi-disc support.
 
-This module queries the iTunes Search API to fetch track information for
-an Apple Music album.  It extracts the album and artist names and
-constructs a list of tracks sorted by disc and track numbers.  The
-resulting data is written to a CSV file in the user's music folder
-(`~/Music Downloader` by default) or in a temporary test directory
-when `--test-mode` is specified.
+Queries the iTunes Lookup API to fetch track information for an Apple Music
+album. Produces a CSV of all tracks across all discs.
 
-Usage as a script:
+Usage:
     python3 -m mdownloader.parsers.apple --url <album_url> [--test-mode]
 """
 
@@ -17,6 +13,8 @@ import argparse
 import os
 import re
 import sys
+import time
+import traceback
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -26,154 +24,169 @@ import requests
 from mdownloader.core.utils import seconds_to_mmss, get_tmp_dir
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def clean_apple_url(original_url: str) -> str:
-    """Strip query parameters and fragments from an Apple Music URL.
-
-    Args:
-        original_url: The full album URL provided by the user.
-
-    Returns:
-        A canonical URL containing only the scheme, netloc and path.
-    """
+    """Strip query parameters and fragments from an Apple Music URL."""
     parsed = urlparse(original_url)
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
 
 
 def extract_album_id(url: str) -> str | None:
-    """Extract the numeric album identifier from an Apple Music URL.
+    """Extract the numeric album identifier from an Apple Music URL."""
+    match = re.search(r"/album/.*?/(\d+)", url)
+    return match.group(1) if match else None
 
-    This helper attempts to robustly locate the numeric album ID in
-    various Apple Music album URL formats.  It strips away any query
-    parameters or fragments, then examines the path segments from right
-    to left and returns the first purely numeric segment it finds.  If
-    none are found, ``None`` is returned.
 
-    Args:
-        url: The (possibly uncleaned) Apple Music album URL.
-
-    Returns:
-        The numeric album identifier as a string, or ``None`` if the
-        URL does not contain a numeric ID.
-    """
-    parsed = urlparse(url)
-    segments = parsed.path.strip('/').split('/')
-    for seg in reversed(segments):
-        if seg.isdigit():
-            return seg
-    return None
-
+# ---------------------------------------------------------------------------
+# Core logic
+# ---------------------------------------------------------------------------
 
 def extract_album_info(url: str) -> tuple[str, str, list[dict]]:
-    """Query the iTunes API and build a sorted track list for an album.
-
-    This function requests metadata for the album and its tracks from the
-    iTunes Search API.  It sorts tracks by disc number and track
-    number and assigns sequential ``track_number`` values across discs.
-
-    Args:
-        url: A cleaned Apple Music album URL.
-
-    Returns:
-        A tuple ``(album_name, artist_name, tracks)`` where ``tracks`` is
-        a list of dictionaries containing metadata for each track.
-
-    Notes:
-        If the API response does not include any tracks, the returned
-        list will be empty and the caller should handle this case.
-    """
+    """Query the Apple API and build a track list for an album."""
     album_id = extract_album_id(url)
     if not album_id:
         print("[!] Could not extract album ID from URL.")
         return "Unknown Album", "Unknown Artist", []
 
     api_url = f"https://itunes.apple.com/lookup?id={album_id}&entity=song"
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        print(f"[!] Failed to query Apple API: {exc}")
+    retries = 3
+    data = None
+    for attempt in range(retries):
+        try:
+            resp = requests.get(api_url, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except requests.exceptions.HTTPError as exc:
+            status = resp.status_code if "resp" in locals() else None
+            if status and (status == 429 or 500 <= status < 600):
+                wait = 2 ** attempt
+                print(f"[!] Apple API status {status}; retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            print(f"[!] Apple API HTTP error: {exc}")
+            return "Unknown Album", "Unknown Artist", []
+        except Exception as exc:
+            print(f"[!] Apple API request failed: {exc}")
+            return "Unknown Album", "Unknown Artist", []
+
+    if data is None:
+        print("[!] Exceeded retries contacting Apple API.")
         return "Unknown Album", "Unknown Artist", []
 
     results = data.get("results", [])
-    if not results or len(results) < 2:
-        print("[!] No tracks found in API response.")
+    if not results:
+        print(f"[WARN] Apple API returned no results for album: {url}")
         return "Unknown Album", "Unknown Artist", []
 
+    # first element is always the album metadata
     album_info = results[0]
     album_name = album_info.get("collectionName", "Unknown Album")
     artist_name = album_info.get("artistName", "Unknown Artist")
 
-    # Collect only track entries and sort by (discNumber, trackNumber)
-    track_entries = []
+    if len(results) < 2:
+        # album metadata exists but there are no track objects
+        print(f"[WARN] Apple API returned album metadata but no tracks for: {url}")
+        return album_name, artist_name, []
+
+    # --- normal track processing below ---
+    track_rows: list[tuple[int, int, dict]] = []
     for item in results[1:]:
         if item.get("wrapperType") != "track":
             continue
-        disc_num = item.get("discNumber", 1)
-        track_num = item.get("trackNumber", 0)
-        track_entries.append((disc_num, track_num, item))
+        disc = item.get("discNumber", 1) or 1
+        num = item.get("trackNumber", 0) or 0
+        track_rows.append((disc, num, item))
 
-    # Sort to ensure correct ordering across multiple discs
-    track_entries.sort(key=lambda tup: (tup[0], tup[1]))
+    track_rows.sort(key=lambda x: (x[0], x[1]))
 
     tracks: list[dict] = []
     seq = 1
-    for disc_num, track_num, track in track_entries:
-        # Skip entries without a track name
-        title = track.get("trackName")
+    for disc, num, raw in track_rows:
+        title = raw.get("trackName")
         if not title:
             continue
-        duration_seconds = track.get("trackTimeMillis", 0) // 1000
-        tracks.append({
-            "track_number": seq,
-            "track_title": title,
-            "album_name": album_name,
-            "artist_name": artist_name,
-            "track_duration": seconds_to_mmss(duration_seconds),
-            "wikipedia_album_url": url,
-            "preferred_clip_url": track.get("previewUrl", ""),
-            "downloaded_locally": False,
-            "disc_number": disc_num,
-        })
+        duration = (raw.get("trackTimeMillis") or 0) // 1000
+        preview = raw.get("previewUrl")
+        if not preview:
+            print(f"[WARN] No preview URL for: Disc {disc} Track {num} – {title}")
+        tracks.append(
+            {
+                "track_number": seq,
+                "track_title": title,
+                "album_name": album_name,
+                "artist_name": artist_name,
+                "track_duration": seconds_to_mmss(duration),
+                "wikipedia_album_url": url,
+                "preferred_clip_url": preview or "",
+                "downloaded_locally": False,
+                "disc_number": disc,
+            }
+        )
         seq += 1
 
     return album_name, artist_name, tracks
 
 
+
+# ---------------------------------------------------------------------------
+# CLI entry
+# ---------------------------------------------------------------------------
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Parse Apple Music album pages.")
     parser.add_argument("--url", required=True, help="Apple Music album URL")
-    parser.add_argument("--test-mode", action="store_true", help="Test-mode: save to temp directory")
+    parser.add_argument(
+        "--test-mode", action="store_true", help="Write CSV to /tmp for testing"
+    )
     args = parser.parse_args()
 
-    cleaned_url = clean_apple_url(args.url)
-    print(f"[DEBUG] Cleaned URL: {cleaned_url}")
+    cleaned = clean_apple_url(args.url)
+    print(f"[DEBUG] Cleaned URL: {cleaned}")
 
-    album_name, artist_name, tracks = extract_album_info(cleaned_url)
-    if not tracks:
-        if args.test_mode:
-            print("[TEST-MODE] No track data returned — album may be restricted on Apple Music API.")
-        else:
-            print("[!] No tracks found. Parsing failed.")
+    try:
+        album_name, artist_name, tracks = extract_album_info(cleaned)
+    except Exception:
+        import traceback
+        print("[❌ ERROR] Unexpected failure parsing album:")
+        traceback.print_exc()
         sys.exit(1)
 
-    df = pd.DataFrame(tracks)
+    # === Handle no tracks ===
+    if not tracks:
+        print("[WARN] Parser found 0 tracks. Album may be restricted or previews hidden.")
+        empty_df = pd.DataFrame(columns=[
+            "track_number", "track_title", "album_name", "artist_name",
+            "track_duration", "wikipedia_album_url", "preferred_clip_url",
+            "downloaded_locally", "disc_number"
+        ])
+        safe_album = re.sub(r"\W+", "_", album_name)[:40]
+        safe_artist = re.sub(r"\W+", "_", artist_name)[:40]
+        filename = f"{safe_artist}_{safe_album}_track.csv"
+        out_dir = get_tmp_dir(True) if args.test_mode \
+            else Path.home() / "Music Downloader" / f"{safe_artist}_{safe_album}"
+        os.makedirs(out_dir, exist_ok=True)
+        csv_path = out_dir / filename
+        empty_df.to_csv(csv_path, index=False)
+        if args.test_mode:
+            print(f"[TEST-MODE] Empty CSV saved to: {csv_path}")
+        else:
+            print(f"[✓] Empty CSV saved to: {csv_path}")
+        sys.exit(0)
 
-    # Safe file and folder names
+    # === Normal case: we have tracks ===
+    df = pd.DataFrame(tracks)
     safe_album = re.sub(r"\W+", "_", album_name)[:40]
     safe_artist = re.sub(r"\W+", "_", artist_name)[:40]
     filename = f"{safe_artist}_{safe_album}_track.csv"
+    out_dir = get_tmp_dir(True) if args.test_mode \
+        else Path.home() / "Music Downloader" / f"{safe_artist}_{safe_album}"
 
-    # Determine base output directory
-    if args.test_mode:
-        folder_path = get_tmp_dir(True) / f"{safe_artist}_{safe_album}"
-        print(f"[TEST-MODE] Using temporary output path: {folder_path}")
-    else:
-        folder_path = Path.home() / "Music Downloader" / f"{safe_artist}_{safe_album}"
-        print(f"[✓] Output directory: {folder_path}")
-
-    os.makedirs(folder_path, exist_ok=True)
-    csv_path = folder_path / filename
+    os.makedirs(out_dir, exist_ok=True)
+    csv_path = out_dir / filename
     df.to_csv(csv_path, index=False)
 
     if args.test_mode:
@@ -186,4 +199,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+        print("[❌ ERROR] Apple parser crashed:")
+        traceback.print_exc()
+        sys.exit(1)
+
