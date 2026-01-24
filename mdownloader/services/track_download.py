@@ -33,17 +33,9 @@ import requests
 import pandas as pd
 import yt_dlp
 from difflib import SequenceMatcher
+import shutil
 
 from mdownloader.core.utils import parse_duration_str, clean_filename
-
-def download_album_tracks(csv_path: str, workers: int = 1, test_mode: bool = False) -> None:
-    """Process a CSV file and download each track's audio."""
-
-    api_key = os.getenv("YOUTUBE_API_KEY")
-    if not api_key:
-        print("[❌ ERROR] YOUTUBE_API_KEY environment variable not set. "
-              "Please export it in your shell config or pass via --api-key.")
-        return
 
 def iso8601_duration_to_seconds(duration: str) -> int:
     """Convert an ISO 8601 duration (e.g., ``PT3M12S``) to seconds.
@@ -289,6 +281,8 @@ def download_album_tracks(csv_path: str, api_key: str, workers: int = 1, test_mo
         if not best_id:
             print(f"[{task_idx}/{total_tracks}] [!] No suitable video found for: {title}")
             return
+        # Build a list of candidate IDs – the best result first, then any other search results
+        candidate_ids = [best_id] + [vid for vid in video_ids if vid != best_id]
         video_url = f"https://www.youtube.com/watch?v={best_id}"
         print(f"[{task_idx}/{total_tracks}] [✓] Found match: {video_url}")
         # Determine output file name and folder
@@ -308,6 +302,15 @@ def download_album_tracks(csv_path: str, api_key: str, workers: int = 1, test_mo
             print(f"[{task_idx}/{total_tracks}] [TEST-MODE] Would save: {full_path}")
             return
         stem = os.path.splitext(filename)[0]
+        # inside process_track(), right before building ydl_opts
+        js_runtimes = {}
+        node_path = shutil.which("node")
+        deno_path = shutil.which("deno")
+        # Add node first so it takes precedence over deno if both are installed
+        if node_path:
+            js_runtimes["node"] = {"path": node_path}
+        if deno_path:
+            js_runtimes["deno"] = {"path": deno_path}
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': os.path.join(album_folder, stem),
@@ -322,13 +325,40 @@ def download_album_tracks(csv_path: str, api_key: str, workers: int = 1, test_mo
             ],
             'concurrent_fragment_downloads': 1,
         }
-        try:
-            print(f"[{task_idx}/{total_tracks}] [↓] Downloading: {filename} ...")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([video_url])
-            print(f"[{task_idx}/{total_tracks}] [✓] Saved: {filename} to {album_folder}\n")
-        except Exception as exc:
-            print(f"[{task_idx}/{total_tracks}] [!] Error downloading {title}: {exc}")
+        if js_runtimes:
+            ydl_opts['js_runtimes'] = js_runtimes
+
+        # Try each candidate video until one works
+        success = False
+        for candidate_id in candidate_ids:
+            candidate_url = f"https://www.youtube.com/watch?v={candidate_id}"
+            try:
+                print(f"[{task_idx}/{total_tracks}] [↓] Downloading: {filename} …")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([candidate_url])
+                print(f"[{task_idx}/{total_tracks}] [✓] Saved: {filename} to {album_folder}\n")
+                success = True
+                break
+            except Exception as exc:
+                print(f"[{task_idx}/{total_tracks}] [!] Error downloading {title} with {candidate_id}: {exc}")
+                # Continue to the next candidate
+                continue
+
+        # If no candidate worked, fall back to the preferred_clip_url stored in the CSV
+        if not success:
+            fallback_url = row.get('preferred_clip_url')
+            if fallback_url:
+                try:
+                    print(f"[{task_idx}/{total_tracks}] [↓] Attempting fallback URL for: {filename} …")
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([fallback_url])
+                    print(f"[{task_idx}/{total_tracks}] [✓] Saved (fallback): {filename} to {album_folder}\n")
+                    success = True
+                except Exception as exc:
+                    print(f"[{task_idx}/{total_tracks}] [!] Fallback download failed for {title}: {exc}")
+            if not success:
+                print(f"[{task_idx}/{total_tracks}] [!] All download attempts failed for: {title}")    
+
     # Run tasks
     if workers <= 1:
         for idx, row in enumerate(df.itertuples(index=False), 1):
