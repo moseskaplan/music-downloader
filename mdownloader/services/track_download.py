@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Optional
 import pandas as pd
 import yt_dlp
 import shutil
@@ -67,12 +66,14 @@ def download_from_csv(csv_path: str, workers: int = 1, test_mode: bool = False) 
         title = clean_filename(str(row.get('track_title', '')))
         artist = clean_filename(str(row.get('artist_name', '')))
         # Determine URL to download
-        url = row.get('selected_url')
-        if not url:
-            url = row.get('preferred_clip_url')
-        if not url or url.strip() == '':
+        url = row.get('selected_url') or row.get('preferred_clip_url')
+        url_str = str(url) if url is not None else ''
+        if not url_str or url_str.strip() == '':
             print(f"[{task_idx}/{total_tracks}] [!] No URL for {artist} - {title}; skipping.")
             return
+        url = url_str.strip()
+        # use url_str for downloading
+
         flag = False
         # If selection_flag column exists and is truthy, mark flag
         if 'selection_flag' in row and str(row['selection_flag']).lower() in ('true', '1', 'yes'):
