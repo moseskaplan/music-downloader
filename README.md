@@ -16,20 +16,34 @@ Built with Python + PyQt6. Dark theme, neon green aesthetic.
 
 ---
 
-## Requirements
+## Using the packaged app
 
-- **Python 3.10+**
-- **ffmpeg** — required by yt-dlp for MP3 conversion
+A pre-built native arm64 `.app` for macOS is available in `dist/Music Downloader.app`.
 
-Install ffmpeg via Homebrew:
+- **No Python required** — the app is self-contained
+- **ffmpeg is bundled** — no need to install ffmpeg separately
+- Just double-click `Music Downloader.app` to launch
 
+---
+
+## Running from source
+
+### Requirements
+
+- **miniforge arm64 Python** at `~/miniforge-arm64` (native Apple Silicon)
+- **ffmpeg** — required by yt-dlp for MP3 conversion when running from source
+
+Install miniforge:
+```bash
+brew install miniforge
+```
+
+Install ffmpeg:
 ```bash
 brew install ffmpeg
 ```
 
----
-
-## Setup
+### Setup
 
 **1. Clone the repo**
 
@@ -41,16 +55,30 @@ cd music-downloader
 **2. Install Python dependencies**
 
 ```bash
-pip install -r requirements.txt
+~/miniforge-arm64/bin/pip install -r requirements.txt
+```
+
+**3. Launch**
+
+```bash
+~/miniforge-arm64/bin/python3 -m mdownloader
 ```
 
 ---
 
-## Launching the app
+## Building the .app
+
+The app is packaged using PyInstaller. To rebuild:
 
 ```bash
-python3 -m mdownloader
+cd music-downloader
+~/miniforge-arm64/bin/pip install pyinstaller
+~/miniforge-arm64/bin/pyinstaller MusicDownloader.spec
 ```
+
+The output is `dist/Music Downloader.app`.
+
+> **Note:** `MusicDownloader.spec` hardcodes the miniforge path at `~/miniforge-arm64`. If rebuilding on a different machine, update the `_QT6_PLUGINS` path in the spec to match your local PyQt6 installation.
 
 ---
 
@@ -101,6 +129,8 @@ music-downloader/
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── pytest.ini
+├── MusicDownloader.spec      # PyInstaller build config
+├── rthook_qt.py              # Qt plugin path runtime hook
 └── mdownloader/
     ├── __main__.py          # Entry point
     ├── version.py
@@ -133,7 +163,7 @@ music-downloader/
 ## Running tests
 
 ```bash
-pytest
+~/miniforge-arm64/bin/python3 -m pytest
 ```
 
 ---
@@ -148,7 +178,7 @@ pytest
 | requests | HTTP requests (Apple Music / Wikipedia) |
 | beautifulsoup4 + lxml | Wikipedia HTML parsing |
 | rapidfuzz | Fuzzy track title matching |
-| ffmpeg *(system)* | MP3 conversion (not a Python package) |
+| ffmpeg *(bundled in .app)* | MP3 conversion — pre-bundled for packaged app, install via Homebrew for source runs |
 
 ---
 
