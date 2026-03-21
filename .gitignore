@@ -1,0 +1,61 @@
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── Build artifacts ───────────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ── PyInstaller ───────────────────────────────────────────────────────────────
+*.app/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── macOS system files ────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── Secrets and credentials ───────────────────────────────────────────────────
+.env
+.env.*
+*.token
+*secret*
+*credential*
+*.key
+*.pem
+github_token
+secrets/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Download output folders ───────────────────────────────────────────────────
+Singles/
+downloads/
+output/
+/tmp/music_downloader*/
+
+# ── Generated CSV files ───────────────────────────────────────────────────────
+*.csv
+
+# ── Test / coverage cache ─────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo

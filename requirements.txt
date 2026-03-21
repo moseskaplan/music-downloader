@@ -1,0 +1,19 @@
+# GUI
+PyQt6>=6.7.0
+
+# Audio download & conversion
+yt-dlp>=2024.5.27
+
+# Metadata tagging
+mutagen>=1.47.0
+
+# Parsing
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=5.2.1
+
+# Fuzzy matching (track selection)
+rapidfuzz>=3.8.1
+
+# Data handling
+pandas>=2.2.0
