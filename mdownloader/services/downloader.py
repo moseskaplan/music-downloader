@@ -64,7 +64,7 @@ def download_track(track: dict, url: str, output_dir: Path) -> Path:
 
     ydl_opts: dict = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
-        "outtmpl": str(output_dir / stem),   # yt-dlp appends the real ext
+        "outtmpl": str(output_dir / stem) + ".%(ext)s",  # explicit ext avoids splitext mis-parsing stems like "Op. 57"
         "quiet": True,
         "noplaylist": True,
         "postprocessors": [{
