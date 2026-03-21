@@ -34,10 +34,12 @@ from mdownloader.core.utils import clean_filename, is_valid_youtube_url
 from mdownloader.gui_qt.style import ACCENT, TEXT_MUTED
 
 # Metadata table column indices
-_COL_TITLE = 0
-_COL_ARTIST = 1
-_COL_DURATION = 2
-_COL_STATUS = 3
+_COL_CHECK = 0
+_COL_INDEX = 1
+_COL_TITLE = 2
+_COL_ARTIST = 3
+_COL_DURATION = 4
+_COL_STATUS = 5
 
 _STATUS_PENDING = "Pending"
 _STATUS_DOWNLOADING = "Downloading"
@@ -237,15 +239,17 @@ class LinksFlowWindow(QWidget):
 
         self._table = _TrackTable()
         self._table.setObjectName("trackTable")
-        self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(["Title", "Artist", "Duration", "Status"])
+        self._table.setColumnCount(6)
+        self._table.setHorizontalHeaderLabels(["", "#", "Title", "Artist", "Duration", "Status"])
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        hdr.resizeSection(_COL_TITLE, 240)
+        hdr.resizeSection(_COL_CHECK, 32)
+        hdr.resizeSection(_COL_INDEX, 40)
+        hdr.resizeSection(_COL_TITLE, 200)
         hdr.resizeSection(_COL_ARTIST, 160)
         hdr.resizeSection(_COL_DURATION, 80)
         hdr.resizeSection(_COL_STATUS, 100)
-        hdr.setMinimumSectionSize(60)
+        hdr.setMinimumSectionSize(32)
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(
             QTableWidget.EditTrigger.DoubleClicked |
@@ -303,7 +307,19 @@ class LinksFlowWindow(QWidget):
         _ro = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
         _rw = _ro | Qt.ItemFlag.ItemIsEditable
 
+        _cb = _ro | Qt.ItemFlag.ItemIsUserCheckable
+
         for row, track in enumerate(self._tracks):
+            check_item = QTableWidgetItem()
+            check_item.setFlags(_cb)
+            check_item.setCheckState(Qt.CheckState.Checked)
+            self._table.setItem(row, _COL_CHECK, check_item)
+
+            index_item = QTableWidgetItem(str(row + 1))
+            index_item.setFlags(_ro)
+            index_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(row, _COL_INDEX, index_item)
+
             title_item = QTableWidgetItem(track.get("track_title", ""))
             title_item.setFlags(_rw)
             self._table.setItem(row, _COL_TITLE, title_item)
@@ -402,10 +418,26 @@ class LinksFlowWindow(QWidget):
             if item:
                 self._tracks[i]["track_title"] = item.text().strip() or self._tracks[i]["track_title"]
 
-        count = len(self._tracks)
+        # Collect checked row indices
+        checked = [
+            i for i in range(self._table.rowCount())
+            if self._table.item(i, _COL_CHECK) and
+               self._table.item(i, _COL_CHECK).checkState() == Qt.CheckState.Checked
+        ]
+        if not checked:
+            QMessageBox.warning(self, "Nothing Selected",
+                                "No tracks are checked. Tick at least one track to download.")
+            return
+
+        count = len(checked)
+        skipped = len(self._tracks) - count
+        msg = f"Ready to download {count} track{'s' if count != 1 else ''}."
+        if skipped:
+            msg += f"\n{skipped} unchecked track{'s' if skipped != 1 else ''} will be skipped."
+        msg += "\n\nProceed?"
+
         reply = QMessageBox.question(
-            self, "Confirm Download",
-            f"Ready to download {count} track{'s' if count != 1 else ''}.\n\nProceed?",
+            self, "Confirm Download", msg,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -414,9 +446,10 @@ class LinksFlowWindow(QWidget):
         config = load_config()
         root = config["download_root_dir"]
 
-        # Output dir: playlist name > single artist > Mixed
-        playlist_names = {t["album_name"] for t in self._tracks if t["album_name"] != "Singles"}
-        artists = {t["artist_name"] for t in self._tracks}
+        # Output dir based on checked tracks only
+        checked_tracks = [self._tracks[i] for i in checked]
+        playlist_names = {t["album_name"] for t in checked_tracks if t["album_name"] != "Singles"}
+        artists = {t["artist_name"] for t in checked_tracks}
         if len(playlist_names) == 1:
             folder = clean_filename(next(iter(playlist_names)))
         elif len(playlist_names) > 1:
@@ -440,7 +473,7 @@ class LinksFlowWindow(QWidget):
         self._set_controls_enabled(False)
 
         from mdownloader.gui_qt.workers.album_download_worker import AlbumDownloadWorker
-        tasks = [(i, t, t["youtube_url"]) for i, t in enumerate(self._tracks)]
+        tasks = [(i, self._tracks[i], self._tracks[i]["youtube_url"]) for i in checked]
         self._worker = AlbumDownloadWorker(
             tasks=tasks,
             output_dir=self._output_dir,
