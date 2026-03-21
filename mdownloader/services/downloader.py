@@ -8,6 +8,7 @@ on failure; callers decide how to report errors.
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 
 import yt_dlp
@@ -53,6 +54,14 @@ def download_track(track: dict, url: str, output_dir: Path) -> Path:
     stem = _build_stem(track)
     mp3_path = output_dir / f"{stem}.mp3"
 
+    # When frozen inside a .app, PATH is empty — point yt-dlp at the bundled
+    # ffmpeg binary directly. Fall back to PATH lookup when running from source.
+    if getattr(sys, "frozen", False):
+        ffmpeg_dir = sys._MEIPASS
+    else:
+        ffmpeg_dir = shutil.which("ffmpeg")
+        ffmpeg_dir = str(Path(ffmpeg_dir).parent) if ffmpeg_dir else None
+
     ydl_opts: dict = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl": str(output_dir / stem),   # yt-dlp appends the real ext
@@ -67,6 +76,7 @@ def download_track(track: dict, url: str, output_dir: Path) -> Path:
         # (ios, mweb).  android uses a different API path and remains the most
         # stable client for audio extraction without tokens.
         "extractor_args": {"youtube": {"player_client": ["android"]}},
+        **({"ffmpeg_location": ffmpeg_dir} if ffmpeg_dir else {}),
     }
 
     # Pass node/deno runtimes to yt-dlp if available (helps with some JS-heavy pages)
