@@ -288,7 +288,7 @@ class LinksFlowWindow(QWidget):
 
         btn_row.addStretch()
 
-        self._download_btn = QPushButton("Confirm & Download")
+        self._download_btn = QPushButton("Confirm && Download")
         self._download_btn.setObjectName("downloadBtn")
         self._download_btn.setFixedHeight(42)
         self._download_btn.clicked.connect(self._on_confirm)
@@ -432,6 +432,11 @@ class LinksFlowWindow(QWidget):
         self._download_total = count
         self._download_progress = 0
         self._download_btn.setText(f"Downloading 0/{count}")
+        self._download_btn.setStyleSheet(
+            "QPushButton { color: #ffaa00; border: 2px solid #ffaa00; "
+            "background-color: transparent; border-radius: 6px; "
+            "font-size: 15px; font-weight: 600; padding: 6px 20px; }"
+        )
         self._set_controls_enabled(False)
 
         from mdownloader.gui_qt.workers.album_download_worker import AlbumDownloadWorker
@@ -473,7 +478,8 @@ class LinksFlowWindow(QWidget):
 
     def _on_all_done(self, success: int, fail: int) -> None:
         self._set_controls_enabled(True)
-        self._download_btn.setText("Confirm & Download")
+        self._download_btn.setStyleSheet("")
+        self._download_btn.setText("Confirm && Download")
 
         msg_box = QMessageBox(self)
 
