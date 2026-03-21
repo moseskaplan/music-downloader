@@ -91,7 +91,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Music Downloader.app",
-    icon=None,                          # add icon.icns here later (Epic H polish)
+    icon="assets/icons/icon.icns",
     bundle_identifier="com.moseskaplan.music-downloader",
     version="0.1.0",
     info_plist={
