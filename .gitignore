@@ -13,6 +13,15 @@ MANIFEST
 # ── PyInstaller ───────────────────────────────────────────────────────────────
 *.app/
 
+# ── Icon build artifacts (regeneratable from SVG) ─────────────────────────────
+assets/icons/icon.iconset/
+assets/icons/option_a_arrow.svg
+assets/icons/option_b_note.svg
+assets/icons/option_b2_note_clean.svg
+assets/icons/option_c_waveform.svg
+assets/icons/option_c2_waveform_cartoony.svg
+assets/icons/option_c3_waveform_elegant.svg
+
 # ── Virtual environments ──────────────────────────────────────────────────────
 .venv/
 venv/

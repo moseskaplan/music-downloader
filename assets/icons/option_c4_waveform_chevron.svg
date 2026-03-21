@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background squircle -->
+  <rect width="512" height="512" rx="115" fill="#1a1a1a"/>
+
+  <!-- Waveform bars (5 bars, bell curve) -->
+  <!-- Bar 1 -->
+  <rect x="68"  y="228" width="52" height="140" rx="26" fill="#39ff14"/>
+  <!-- Bar 2 -->
+  <rect x="140" y="156" width="52" height="212" rx="26" fill="#39ff14"/>
+  <!-- Bar 3 (tallest, centre) -->
+  <rect x="212" y="100" width="52" height="268" rx="26" fill="#39ff14"/>
+  <!-- Bar 4 -->
+  <rect x="284" y="156" width="52" height="212" rx="26" fill="#39ff14"/>
+  <!-- Bar 5 -->
+  <rect x="356" y="228" width="52" height="140" rx="26" fill="#39ff14"/>
+
+  <!-- Open chevron — point aligned to centre bar (x=238), 50% smaller -->
+  <path d="M183,406 L238,432 L293,406"
+        fill="none"
+        stroke="#39ff14"
+        stroke-width="52"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+</svg>
