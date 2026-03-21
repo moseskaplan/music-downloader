@@ -5,6 +5,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # ── Explicitly collect Qt6 plugins from the arm64 miniforge environment ───────
 # Pin directly to the miniforge PyQt6 plugins — clean arm64, no Qt5 present.
+# NOTE: This path is machine-specific. If rebuilding on a different machine,
+# update this to match your local PyQt6 installation path.
 _QT6_PLUGINS = "/Users/moseskaplan/miniforge-arm64/lib/python3.13/site-packages/PyQt6/Qt6/plugins"
 
 pyqt6_datas = [
