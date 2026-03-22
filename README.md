@@ -1,6 +1,6 @@
 # Music Downloader
 
-A macOS desktop app for downloading and tagging music from YouTube, Apple Music, and Wikipedia.
+A desktop app for downloading and tagging music from YouTube, Apple Music, and Wikipedia. Runs on macOS and Windows.
 
 Built with Python + PyQt6. Dark theme, neon green aesthetic.
 
@@ -20,11 +20,15 @@ Built with Python + PyQt6. Dark theme, neon green aesthetic.
 
 ## Using the packaged app
 
-A pre-built native arm64 `.app` for macOS is available in `dist/Music Downloader.app`.
+### macOS
+A pre-built native arm64 `.app` is available in `dist/Music Downloader.app`.
 
 - **No Python required** — the app is self-contained
 - **ffmpeg is bundled** — no need to install ffmpeg separately
 - Just double-click `Music Downloader.app` to launch
+
+### Windows
+Build the `.exe` yourself using the instructions in [`docs/build-windows.md`](docs/build-windows.md). The output is `dist\MusicDownloader\MusicDownloader.exe` — self-contained, no Python or ffmpeg required.
 
 ---
 
@@ -68,9 +72,9 @@ cd music-downloader
 
 ---
 
-## Building the .app
+## Building the app
 
-The app is packaged using PyInstaller. To rebuild:
+### macOS (.app)
 
 ```bash
 cd music-downloader
@@ -78,9 +82,19 @@ cd music-downloader
 ~/miniforge-arm64/bin/pyinstaller MusicDownloader.spec
 ```
 
-The output is `dist/Music Downloader.app`.
+Output: `dist/Music Downloader.app`
 
 > **Note:** `MusicDownloader.spec` hardcodes the miniforge path at `~/miniforge-arm64`. If rebuilding on a different machine, update the `_QT6_PLUGINS` path in the spec to match your local PyQt6 installation.
+
+### Windows (.exe)
+
+See [`docs/build-windows.md`](docs/build-windows.md) for full step-by-step instructions.
+
+```
+pyinstaller MusicDownloader-Windows.spec
+```
+
+Output: `dist\MusicDownloader\MusicDownloader.exe`
 
 ---
 
@@ -132,8 +146,11 @@ music-downloader/
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── pytest.ini
-├── MusicDownloader.spec      # PyInstaller build config
-├── rthook_qt.py              # Qt plugin path runtime hook
+├── MusicDownloader.spec          # PyInstaller build config (macOS)
+├── MusicDownloader-Windows.spec  # PyInstaller build config (Windows)
+├── rthook_qt.py                  # Qt plugin path runtime hook (macOS)
+├── docs/
+│   └── build-windows.md          # Windows build instructions
 └── mdownloader/
     ├── __main__.py          # Entry point
     ├── version.py
@@ -184,10 +201,16 @@ music-downloader/
 | requests | HTTP requests (Apple Music / Wikipedia) |
 | beautifulsoup4 + lxml | Wikipedia HTML parsing |
 | rapidfuzz | Fuzzy track title matching |
-| ffmpeg *(bundled in .app)* | MP3 conversion — pre-bundled for packaged app, install via Homebrew for source runs |
+| ffmpeg *(bundled)* | MP3 conversion — pre-bundled in packaged app (both macOS and Windows); install via Homebrew for macOS source runs |
 
 ---
 
 ## Version
 
 `0.1.0` — initial release
+
+---
+
+## Credits
+
+Designed and product-managed by Moses Kaplan. Code written primarily by [Claude Code](https://claude.ai/claude-code) (Anthropic) through pair programming sessions.
