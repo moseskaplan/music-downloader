@@ -9,6 +9,7 @@ CONFIG_PATH = (
 
 DEFAULT_CONFIG: dict = {
     "download_root_dir": str(Path.home() / "Desktop"),  # dev default; change to ~/Music Downloader for release
+    "google_drive_music_dir": "",  # blank until user configures in Settings
 }
 
 

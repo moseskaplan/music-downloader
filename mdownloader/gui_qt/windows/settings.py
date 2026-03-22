@@ -72,6 +72,48 @@ class SettingsDialog(QDialog):
         hint.setObjectName("folderPath")
         layout.addWidget(hint)
 
+        layout.addSpacing(24)
+
+        sep_mid = QFrame()
+        sep_mid.setObjectName("separator")
+        sep_mid.setFrameShape(QFrame.Shape.HLine)
+        layout.addWidget(sep_mid)
+
+        layout.addSpacing(24)
+
+        # ── Google Drive folder ───────────────────────────
+        gd_section = QLabel("GOOGLE DRIVE FOLDER")
+        gd_section.setObjectName("sectionLabel")
+        layout.addWidget(gd_section)
+
+        layout.addSpacing(10)
+
+        gd_row = QHBoxLayout()
+        gd_row.setSpacing(8)
+
+        gd_path = self._config.get("google_drive_music_dir", "")
+        self._gd_field = QLineEdit(gd_path)
+        self._gd_field.setObjectName("folderField")
+        self._gd_field.setReadOnly(True)
+        self._gd_field.setFixedHeight(36)
+        self._gd_field.setPlaceholderText("Not configured — click Choose… to set")
+        gd_row.addWidget(self._gd_field)
+
+        btn_choose_gd = QPushButton("Choose…")
+        btn_choose_gd.setObjectName("secondaryBtn")
+        btn_choose_gd.setFixedHeight(36)
+        btn_choose_gd.setFixedWidth(90)
+        btn_choose_gd.clicked.connect(self._on_choose_gd_folder)
+        gd_row.addWidget(btn_choose_gd)
+
+        layout.addLayout(gd_row)
+
+        layout.addSpacing(8)
+
+        gd_hint = QLabel("Destination for  Send to Drive  — files are copied flat into this folder.")
+        gd_hint.setObjectName("folderPath")
+        layout.addWidget(gd_hint)
+
         layout.addSpacing(32)
 
         sep2 = QFrame()
@@ -109,7 +151,19 @@ class SettingsDialog(QDialog):
         if chosen:
             self._folder_field.setText(chosen)
 
+    def _on_choose_gd_folder(self):
+        current = self._gd_field.text() or str(Path.home())
+        chosen = QFileDialog.getExistingDirectory(
+            self,
+            "Choose Google Drive Music Folder",
+            current,
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if chosen:
+            self._gd_field.setText(chosen)
+
     def _on_save(self):
         self._config["download_root_dir"] = self._folder_field.text()
+        self._config["google_drive_music_dir"] = self._gd_field.text()
         save_config(self._config)
         self.accept()

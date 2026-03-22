@@ -13,7 +13,8 @@ Built with Python + PyQt6. Dark theme, neon green aesthetic.
 - **Individual Links** — paste one or more YouTube URLs (single tracks or full playlists), edit titles before downloading, and get everything tagged automatically
 - **Editable metadata** — review and correct track titles before any file hits disk
 - **ID3 tagging** — every downloaded MP3 is tagged with title, artist, album, and track number from Apple Music / Wikipedia (not from YouTube video titles)
-- **Configurable output folder** — set your download root via the Settings screen; defaults to `~/Music Downloader/`
+- **Send to Drive** — after a successful download, copy all tracks directly to a configured Google Drive folder with one click; conflicts are listed by filename before any files are overwritten
+- **Configurable output folder** — set your download root and Google Drive destination folder via the Settings screen
 
 ---
 
@@ -120,7 +121,7 @@ The output is `dist/Music Downloader.app`.
         └── ...
 ```
 
-The download root defaults to `~/Music Downloader/` and can be changed in **Settings**.
+The download root defaults to `~/Music Downloader/` and can be changed in **Settings**, along with the Google Drive destination folder for **Send to Drive**.
 
 ---
 
@@ -142,6 +143,7 @@ music-downloader/
     ├── gui_qt/
     │   ├── app.py           # QApplication setup
     │   ├── style.py         # Dark theme + neon green stylesheet
+    │   ├── dialogs.py       # Shared custom dialogs (download result, Send to Drive)
     │   ├── windows/
     │   │   ├── home.py      # Home screen
     │   │   ├── album_flow.py
