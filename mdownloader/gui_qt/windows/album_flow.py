@@ -23,6 +23,9 @@ class AlbumFlowWindow(QWidget):
         self._artist_name = ""
         self._output_dir = None
         self._worker = None
+        self._playlist_worker = None
+        self._download_total = 0
+        self._download_progress = 0
         self._setup_ui()
 
     def _setup_ui(self):
@@ -136,7 +139,37 @@ class AlbumFlowWindow(QWidget):
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
-        layout.addSpacing(12)
+        layout.addSpacing(16)
+
+        # ── YouTube playlist auto-fill ────────────────────────────────────────
+        playlist_label = QLabel("YOUTUBE PLAYLIST  (optional auto-fill)")
+        playlist_label.setObjectName("sectionLabel")
+        layout.addWidget(playlist_label)
+
+        layout.addSpacing(8)
+
+        playlist_row = QHBoxLayout()
+        playlist_row.setSpacing(10)
+
+        self._playlist_input = QLineEdit()
+        self._playlist_input.setObjectName("urlInput")
+        self._playlist_input.setPlaceholderText(
+            "https://www.youtube.com/playlist?list=…"
+        )
+        self._playlist_input.setFixedHeight(36)
+        self._playlist_input.returnPressed.connect(self._on_autofill)
+        playlist_row.addWidget(self._playlist_input)
+
+        self._autofill_btn = QPushButton("Auto-fill")
+        self._autofill_btn.setObjectName("secondaryBtn")
+        self._autofill_btn.setFixedHeight(36)
+        self._autofill_btn.setFixedWidth(100)
+        self._autofill_btn.clicked.connect(self._on_autofill)
+        playlist_row.addWidget(self._autofill_btn)
+
+        layout.addLayout(playlist_row)
+
+        layout.addSpacing(16)
 
         sep = QFrame()
         sep.setObjectName("separator")
@@ -292,6 +325,8 @@ class AlbumFlowWindow(QWidget):
         self._back_btn.setEnabled(enabled)
         self._home_btn.setEnabled(enabled)
         self._confirm_btn.setEnabled(enabled)
+        self._autofill_btn.setEnabled(enabled)
+        self._playlist_input.setEnabled(enabled)
 
     # ── Download signal handlers ───────────────────────────────────────────
 
@@ -302,12 +337,18 @@ class AlbumFlowWindow(QWidget):
     def _on_track_done(self, row: int) -> None:
         from mdownloader.gui_qt.models.track_table_model import STATUS_DONE
         self._model.set_track_status(row, STATUS_DONE)
+        self._download_progress += 1
+        self._confirm_btn.setText(f"Downloading {self._download_progress}/{self._download_total}")
 
     def _on_track_failed(self, row: int, error_msg: str) -> None:
         from mdownloader.gui_qt.models.track_table_model import STATUS_FAILED
         self._model.set_track_status(row, STATUS_FAILED)
+        self._download_progress += 1
+        self._confirm_btn.setText(f"Downloading {self._download_progress}/{self._download_total}")
 
     def _on_all_done(self, success: int, fail: int) -> None:
+        self._confirm_btn.setText("Confirm && Download")
+        self._confirm_btn.setStyleSheet("")
         self._set_controls_enabled(True)
 
         import subprocess
@@ -339,6 +380,76 @@ class AlbumFlowWindow(QWidget):
 
         if fail == 0:
             self.close()
+
+    def _on_autofill(self):
+        if not self._model:
+            return
+
+        playlist_url = self._playlist_input.text().strip()
+        if not playlist_url:
+            QMessageBox.warning(
+                self, "No Playlist URL",
+                "Please paste a YouTube playlist URL first."
+            )
+            return
+
+        self._autofill_btn.setText("Fetching…")
+        self._autofill_btn.setEnabled(False)
+        self._playlist_input.setEnabled(False)
+
+        from mdownloader.gui_qt.workers.playlist_fetch_worker import PlaylistFetchWorker
+        self._playlist_worker = PlaylistFetchWorker(playlist_url, parent=self)
+        self._playlist_worker.finished.connect(self._on_autofill_done)
+        self._playlist_worker.error.connect(self._on_autofill_error)
+        self._playlist_worker.start()
+
+    def _on_autofill_done(self, entries: list) -> None:
+        self._autofill_btn.setText("Auto-fill")
+        self._autofill_btn.setEnabled(True)
+        self._playlist_input.setEnabled(True)
+
+        if not entries:
+            QMessageBox.warning(
+                self, "Empty Playlist",
+                "No tracks were found in that playlist. "
+                "Check the URL and make sure the playlist is public."
+            )
+            return
+
+        from mdownloader.services.playlist_matcher import match_playlist_to_tracks
+        assignments = match_playlist_to_tracks(
+            self._model._tracks, entries
+        )
+
+        # Only fill rows that are currently blank
+        filled = 0
+        for row, url in assignments.items():
+            if not self._model.get_url(row).strip():
+                self._model.set_track_url(row, url)
+                filled += 1
+
+        skipped_existing = len(assignments) - filled
+        unmatched = self._model.rowCount() - len(assignments)
+
+        parts = [f"Auto-filled {filled} of {self._model.rowCount()} tracks."]
+        if unmatched:
+            parts.append(f"{unmatched} had no close match.")
+        if skipped_existing:
+            parts.append(f"{skipped_existing} already had a URL and were left unchanged.")
+
+        QMessageBox.information(self, "Auto-fill Complete", " ".join(parts))
+
+    def _on_autofill_error(self, message: str) -> None:
+        self._autofill_btn.setText("Auto-fill")
+        self._autofill_btn.setEnabled(True)
+        self._playlist_input.setEnabled(True)
+
+        QMessageBox.critical(
+            self, "Playlist Fetch Failed",
+            f"Could not fetch the YouTube playlist.\n\n"
+            f"Details:\n{message}\n\n"
+            f"Check the URL and your internet connection, then try again."
+        )
 
     def _on_confirm(self):
         if not self._model:
@@ -401,6 +512,14 @@ class AlbumFlowWindow(QWidget):
             else:
                 self._model.set_track_status(i, STATUS_PENDING)
 
+        self._download_total = entered
+        self._download_progress = 0
+        self._confirm_btn.setText(f"Downloading 0/{entered}")
+        self._confirm_btn.setStyleSheet(
+            "QPushButton { color: #ffaa00; border: 2px solid #ffaa00; "
+            "background-color: transparent; border-radius: 6px; "
+            "font-size: 15px; font-weight: 600; padding: 6px 20px; }"
+        )
         self._set_controls_enabled(False)
 
         from mdownloader.gui_qt.workers.album_download_worker import AlbumDownloadWorker
