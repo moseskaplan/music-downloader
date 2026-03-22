@@ -1,6 +1,5 @@
 """Individual Links download workflow: URL list → metadata preview → download."""
 
-import subprocess
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
@@ -514,32 +513,9 @@ class LinksFlowWindow(QWidget):
         self._download_btn.setStyleSheet("")
         self._download_btn.setText("Confirm && Download")
 
-        msg_box = QMessageBox(self)
-
-        if fail == 0:
-            msg_box.setWindowTitle("✓ Download Complete")
-            msg_box.setText(
-                f"All {success} track{'s' if success != 1 else ''} downloaded successfully.\n\n"
-                f"Saved to:\n{self._output_dir}"
-            )
-            msg_box.setIcon(QMessageBox.Icon.Information)
-        else:
-            msg_box.setWindowTitle("✗ Download Incomplete")
-            msg_box.setText(
-                f"{fail} track{'s' if fail != 1 else ''} failed to download.\n"
-                f"{success} track{'s' if success != 1 else ''} succeeded.\n\n"
-                f"Failed tracks are shown in red in the table.\n\n"
-                f"Saved to:\n{self._output_dir}"
-            )
-            msg_box.setIcon(QMessageBox.Icon.Warning)
-
-        open_btn = msg_box.addButton("Open Folder", QMessageBox.ButtonRole.ActionRole)
-        msg_box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
-        msg_box.exec()
-
-        if msg_box.clickedButton() == open_btn and self._output_dir:
-            self._output_dir.mkdir(parents=True, exist_ok=True)
-            subprocess.run(["open", str(self._output_dir)])
+        from mdownloader.gui_qt.dialogs import DownloadResultDialog
+        dlg = DownloadResultDialog(success, fail, self._output_dir, parent=self)
+        dlg.exec()
 
         if fail == 0:
             self.close()

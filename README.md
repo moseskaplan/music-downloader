@@ -8,10 +8,11 @@ Built with Python + PyQt6. Dark theme, neon green aesthetic.
 
 ## Features
 
-- **Album flow** — paste an Apple Music or Wikipedia album URL, preview the full track list, then download and auto-tag every track as MP3
+- **Album flow** — paste an Apple Music or Wikipedia album URL, preview the full track list, paste YouTube URLs per track (or auto-fill from a YouTube playlist), then download and auto-tag every track as MP3
+- **YouTube playlist auto-fill** — paste a YouTube playlist URL on the album track screen and the app fuzzy-matches playlist videos to album tracks automatically, filling in as many YouTube URLs as it can
 - **Individual Links** — paste one or more YouTube URLs (single tracks or full playlists), edit titles before downloading, and get everything tagged automatically
 - **Editable metadata** — review and correct track titles before any file hits disk
-- **ID3 tagging** — every downloaded MP3 is tagged with title, artist, album, and track number
+- **ID3 tagging** — every downloaded MP3 is tagged with title, artist, album, and track number from Apple Music / Wikipedia (not from YouTube video titles)
 - **Configurable output folder** — set your download root via the Settings screen; defaults to `~/Music Downloader/`
 
 ---
@@ -87,9 +88,11 @@ The output is `dist/Music Downloader.app`.
 ### Album flow
 
 1. Paste an **Apple Music** album URL (e.g. `https://music.apple.com/us/album/...`) or a **Wikipedia** album page URL
-2. The app fetches the track list and shows a preview table with title, artist, duration, and track number
-3. Click **Download** — each track is downloaded from YouTube, converted to MP3, and tagged with ID3 metadata
-4. Files are saved to `<download root>/<Artist>/<Album>/`
+2. The app fetches the track list and shows a preview table with disc, track number, title, and duration
+3. **Optional:** paste a YouTube playlist URL and click **Auto-fill** — the app fuzzy-matches playlist videos to album tracks and fills in as many YouTube URLs as it can. Any unmatched rows can be filled in manually
+4. Paste a YouTube URL into the **YouTube URL** column for each track you want to download; rows with no URL are skipped
+5. Click **Confirm & Download** — progress shown live in the button (`Downloading 1/N …`)
+6. Files are saved to `<download root>/<Artist> - <Album>/`
 
 ### Individual Links flow
 
@@ -106,10 +109,9 @@ The output is `dist/Music Downloader.app`.
 
 ```
 <download root>/
-├── <Artist>/
-│   └── <Album>/
-│       ├── 01 - Artist - Title.mp3
-│       └── 02 - Artist - Title.mp3
+├── Artist - Album/
+│   ├── 01 - Artist - Title.mp3
+│   └── 02 - Artist - Title.mp3
 └── Singles/
     ├── <Artist>/
     │   └── Artist - Title.mp3
@@ -147,15 +149,17 @@ music-downloader/
     │   │   └── settings.py
     │   ├── workers/
     │   │   ├── album_download_worker.py
-    │   │   └── metadata_fetch_worker.py
+    │   │   ├── metadata_fetch_worker.py
+    │   │   └── playlist_fetch_worker.py  # YouTube playlist metadata fetch
     │   └── models/
     │       └── track_table_model.py
     ├── parsers/
-    │   ├── apple.py         # iTunes API parser
+    │   ├── apple.py         # iTunes API parser (multi-storefront fallback)
     │   └── wiki.py          # Wikipedia album scraper
     └── services/
         ├── downloader.py    # yt-dlp download + ID3 tagging
-        └── youtube_metadata.py  # Metadata-only fetch (no download)
+        ├── youtube_metadata.py  # Metadata-only fetch (no download)
+        └── playlist_matcher.py  # rapidfuzz title matching for auto-fill
 ```
 
 ---
