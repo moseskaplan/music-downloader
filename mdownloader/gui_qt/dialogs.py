@@ -199,3 +199,4 @@ class DownloadResultDialog(QDialog):
         if skipped:
             msg_parts.append(f"{skipped} skipped.")
         QMessageBox.information(self, "Sent to Drive", " ".join(msg_parts))
+        self.accept()  # close result dialog → flow window closes automatically
