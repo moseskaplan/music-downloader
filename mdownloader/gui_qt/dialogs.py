@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -13,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from mdownloader.config import load_config
+from mdownloader.core.utils import open_folder
 from mdownloader.gui_qt.style import ACCENT
 
 
@@ -152,7 +152,7 @@ class DownloadResultDialog(QDialog):
     def _on_open_folder(self) -> None:
         if self._output_dir:
             self._output_dir.mkdir(parents=True, exist_ok=True)
-            subprocess.run(["open", str(self._output_dir)])
+            open_folder(self._output_dir)
 
     def _on_send_to_drive(self) -> None:
         src_files = list(self._output_dir.glob("*.mp3"))

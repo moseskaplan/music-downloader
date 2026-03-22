@@ -1,6 +1,6 @@
 """Home screen — entry point for the two main workflows and settings."""
 
-import subprocess
+from mdownloader.core.utils import open_folder
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
@@ -128,7 +128,7 @@ class HomeWindow(QWidget):
     def _on_open_folder(self):
         folder = Path(self._config["download_root_dir"]).expanduser()
         folder.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["open", str(folder)])
+        open_folder(folder)
 
     def refresh_folder_label(self):
         """Call this after saving new config to update the displayed path."""

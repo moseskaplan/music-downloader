@@ -1,13 +1,27 @@
 """Utility functions shared across the music downloader."""
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 from datetime import timedelta
 
 
+def open_folder(path: Path) -> None:
+    """Open a folder in the system file manager (cross-platform)."""
+    if sys.platform == "win32":
+        subprocess.run(["explorer", str(path)])
+    elif sys.platform == "darwin":
+        subprocess.run(["open", str(path)])
+    else:
+        subprocess.run(["xdg-open", str(path)])
+
+
 def get_tmp_dir(test_mode: bool) -> Path:
     """Return the appropriate temporary directory path."""
-    return Path("/tmp/music_downloader_test") if test_mode else Path("/tmp/music_downloader_dryrun")
+    import tempfile
+    base = Path(tempfile.gettempdir())
+    return base / ("music_downloader_test" if test_mode else "music_downloader_dryrun")
 
 
 def seconds_to_mmss(seconds: int) -> str:
