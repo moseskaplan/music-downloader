@@ -182,6 +182,10 @@ music-downloader/
 ## Running tests
 
 ```bash
+# Install runtime and development (test) dependencies
+pip install -r requirements.txt -r requirements-dev.txt
+
+# Run the test suite
 python3 -m pytest
 ```
 
