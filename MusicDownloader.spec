@@ -1,13 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for Music Downloader macOS .app bundle."""
 
+import os
+import shutil
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-# ── Explicitly collect Qt6 plugins from the arm64 miniforge environment ───────
-# Pin directly to the miniforge PyQt6 plugins — clean arm64, no Qt5 present.
-# NOTE: This path is machine-specific. If rebuilding on a different machine,
-# update this to match your local PyQt6 installation path.
-_QT6_PLUGINS = "/Users/moseskaplan/miniforge-arm64/lib/python3.13/site-packages/PyQt6/Qt6/plugins"
+# ── Dynamically locate Qt6 plugins from the active Python environment ─────────
+import PyQt6
+_QT6_PLUGINS = os.path.join(os.path.dirname(PyQt6.__file__), "Qt6", "plugins")
+
+# ── Dynamically locate ffmpeg ─────────────────────────────────────────────────
+_FFMPEG = shutil.which("ffmpeg")
+if not _FFMPEG:
+    raise FileNotFoundError("ffmpeg not found on PATH. Install it (e.g. brew install ffmpeg) before building.")
 
 pyqt6_datas = [
     # macOS window system plugin — required for any GUI to appear
@@ -45,7 +50,7 @@ a = Analysis(
     ["mdownloader/__main__.py"],        # entry point
     pathex=["."],                       # project root on sys.path
     binaries=[
-        ("/usr/local/bin/ffmpeg", "."), # bundle ffmpeg at _MEIPASS root
+        (_FFMPEG, "."),                 # bundle ffmpeg at _MEIPASS root
     ],
     datas=pyqt6_datas,
     hiddenimports=hidden,
