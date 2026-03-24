@@ -36,13 +36,8 @@ Build the `.exe` yourself using the instructions in [`docs/build-windows.md`](do
 
 ### Requirements
 
-- **miniforge arm64 Python** at `~/miniforge-arm64` (native Apple Silicon)
+- **Python 3.11+**
 - **ffmpeg** — required by yt-dlp for MP3 conversion when running from source
-
-Install miniforge:
-```bash
-brew install miniforge
-```
 
 Install ffmpeg:
 ```bash
@@ -61,13 +56,13 @@ cd music-downloader
 **2. Install Python dependencies**
 
 ```bash
-~/miniforge-arm64/bin/pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 **3. Launch**
 
 ```bash
-~/miniforge-arm64/bin/python3 -m mdownloader
+python3 -m mdownloader
 ```
 
 ---
@@ -76,22 +71,24 @@ cd music-downloader
 
 ### macOS (.app)
 
+Requires **ffmpeg** and **PyInstaller** installed on the build machine. The spec file auto-detects both `ffmpeg` and the PyQt6 plugins path at build time.
+
 ```bash
 cd music-downloader
-~/miniforge-arm64/bin/pip install pyinstaller
-~/miniforge-arm64/bin/pyinstaller MusicDownloader.spec
+brew install ffmpeg
+python3 -m pip install -r requirements.txt
+python3 -m pip install pyinstaller
+python3 -m PyInstaller MusicDownloader.spec
 ```
 
 Output: `dist/Music Downloader.app`
-
-> **Note:** `MusicDownloader.spec` hardcodes the miniforge path at `~/miniforge-arm64`. If rebuilding on a different machine, update the `_QT6_PLUGINS` path in the spec to match your local PyQt6 installation.
 
 ### Windows (.exe)
 
 See [`docs/build-windows.md`](docs/build-windows.md) for full step-by-step instructions.
 
 ```
-pyinstaller MusicDownloader-Windows.spec
+python -m PyInstaller MusicDownloader-Windows.spec
 ```
 
 Output: `dist\MusicDownloader\MusicDownloader.exe`
@@ -186,7 +183,11 @@ music-downloader/
 ## Running tests
 
 ```bash
-~/miniforge-arm64/bin/python3 -m pytest
+# Install runtime and development (test) dependencies
+pip install -r requirements.txt -r requirements-dev.txt
+
+# Run the test suite
+python3 -m pytest
 ```
 
 ---

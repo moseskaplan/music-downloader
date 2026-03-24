@@ -46,8 +46,8 @@ cd music-downloader
 ### 4. Install Python dependencies
 
 ```
-pip install -r requirements.txt
-pip install pyinstaller
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
 ```
 
 ---
@@ -72,7 +72,7 @@ C:\ffmpeg\bin\ffmpeg.exe -version
 From the `music-downloader` folder, run:
 
 ```
-pyinstaller MusicDownloader-Windows.spec
+python -m PyInstaller MusicDownloader-Windows.spec
 ```
 
 This will take a few minutes. When it finishes you'll see:
